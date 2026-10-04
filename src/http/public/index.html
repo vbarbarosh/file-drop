@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#121614">
+    <title>File Drop</title>
+    <script>
+        theme_stamp();
+
+        // Before the first paint: the stored theme, else the OS one, read once.
+        function theme_stamp()
+        {
+            let theme = null;
+            try {
+                theme = localStorage.getItem('theme');
+            }
+            catch {
+                // storage blocked; the OS preference decides
+            }
+            if ((theme !== 'light') && (theme !== 'dark')) {
+                theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.dataset.theme = theme;
+        }
+    </script>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>File Drop <span id="host"></span></h1>
+        <button id="theme_toggle" type="button" aria-label="Toggle theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"></path>
+            </svg>
+        </button>
+    </header>
+
+    <main>
+        <a id="apk_link" href="file-drop.apk" hidden>
+            <span>Install the Android app</span>
+            <small>photos, voice, files and text, sent even after the wifi comes back</small>
+        </a>
+
+        <label id="choose" for="file_input">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 16V4M6 10l6-6 6 6M4 20h16"></path>
+            </svg>
+            <span>Send files</span>
+        </label>
+        <input id="file_input" type="file" multiple hidden>
+
+        <form id="text_form">
+            <textarea id="text_input" rows="3" placeholder="Text to send"></textarea>
+            <button id="text_send" type="submit">Send text</button>
+        </form>
+
+        <ul id="uploads"></ul>
+    </main>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

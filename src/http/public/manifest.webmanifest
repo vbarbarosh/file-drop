@@ -1,0 +1,16 @@
+{
+    "name": "File Drop",
+    "short_name": "File Drop",
+    "start_url": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#121614",
+    "theme_color": "#121614",
+    "icons": [
+        {
+            "src": "icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ]
+}

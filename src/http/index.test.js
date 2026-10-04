@@ -140,6 +140,12 @@ test('info names the server', async function () {
     assert.strictEqual(typeof info.apk_version, 'number');
 });
 
+test('the page is served', async function () {
+    const res = await fetch(`${base_url}/`);
+    assert.strictEqual(res.status, 200);
+    assert.match(await res.text(), /<title>File Drop<\/title>/);
+});
+
 test('a discovery question gets the port back', async function () {
     const answer = await discovery_ask();
     assert.deepStrictEqual(answer, {name: 'file-drop', host: os.hostname(), port});
