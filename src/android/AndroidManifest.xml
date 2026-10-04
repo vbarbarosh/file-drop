@@ -33,7 +33,6 @@
         <activity
             android:name=".ShareActivity"
             android:exported="true"
-            android:label="File Drop"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar">
             <intent-filter>

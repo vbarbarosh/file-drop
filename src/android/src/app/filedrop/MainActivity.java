@@ -33,6 +33,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 // The app's one screen. It only sends: take photos, record voice, pick
 // files or a folder, type a text. Everything goes to the outbox first; the
@@ -277,7 +278,7 @@ public class MainActivity extends Activity
         queue_text.setText(queue);
         if (recorder != null) {
             long seconds = (SystemClock.elapsedRealtime() - voice_started_ms)/1000;
-            voice_button.setText(String.format("Stop recording · %d:%02d", seconds/60, seconds%60));
+            voice_button.setText(String.format(Locale.US, "Stop recording · %d:%02d", seconds/60, seconds%60));
         }
     }
 
