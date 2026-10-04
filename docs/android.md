@@ -40,7 +40,27 @@ app first (and with it the files still waiting in its outbox).
 `src/android/bin/test` runs the sending core against the real server:
 files waiting with no laptop and leaving once it comes, the laptop found
 by its udp answer, uploads through a proxy that cuts every connection after
-700 kB, a laptop that vanishes mid-file and comes back. Android Lint
-reports no errors. The screens, the camera, the recorder, the pickers, the
-background job and the installer need a phone: there was none, and no
-emulator, where this was built.
+700 kB, a laptop that vanishes mid-file and comes back, a job stopped
+mid-file. Android Lint reports no errors.
+
+The app itself was run in an Android 9 emulator (software emulation, no
+KVM), against the server from `bin/run`: send text; the laptop away (the
+text waits, then goes by itself once `bin/run` is back); choose files;
+choose folder (the tree arrives); share a photo; take photos (the camera
+opens again after the shot); record voice (a playable `.m4a`); the dark
+theme; the update offer, download and install of version 2 over version 1.
+
+Not run: a real phone, Android 10 to 14 (the Android 11 image boot-looped
+under software emulation), the notification permission prompt (Android
+13+), and the udp search on a real wifi: the emulator's network is its
+own, so there the address was typed. The search itself is tested on the
+JVM and against the docker container.
+
+## Trying it in an emulator
+
+The emulator reaches the laptop through adb, not the wifi:
+
+    adb reverse tcp:8080 tcp:8080
+
+then **laptop** → `127.0.0.1:8080` in the app. (`10.0.2.2` answers ping
+but did not pass tcp in this setup.)
