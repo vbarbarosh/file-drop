@@ -26,6 +26,8 @@ public class SendJob extends JobService
     private static final int notice_sending = 1;
     private static final int notice_update = 2;
 
+    static final String no_laptop = "no laptop on this wifi";
+
     // What the screen shows; written by the job's thread.
     static volatile boolean running = false;
     static volatile String status = "";
@@ -110,7 +112,7 @@ public class SendJob extends JobService
         int step = Settings.prefs(this).getInt("retry_step", 0);
         long delay_ms = (result == Sender.Result.sent_all) ? 0 : retry_delays_ms[Math.min(step, retry_delays_ms.length - 1)];
         Settings.prefs(this).edit().putInt("retry_step", step + 1).apply();
-        status = (result == Sender.Result.no_server) ? "no laptop on this wifi" : "connection lost";
+        status = (result == Sender.Result.no_server) ? no_laptop : "connection lost";
         notice(notice_sending, plural(left, "file") + " waiting for the laptop", false, -1);
         // Scheduling our own id while it runs would stop it: finish first.
         jobFinished(params, false);

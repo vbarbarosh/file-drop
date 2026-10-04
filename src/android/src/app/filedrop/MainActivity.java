@@ -269,10 +269,20 @@ public class MainActivity extends Activity
 
     private void refresh()
     {
-        laptop_text.setText((server != null) ? ("Laptop: " + server.host) : laptop_state);
         int waiting = outbox.count();
         String importing = Importer.status;
         String sending = SendJob.status;
+        // The job tried after this screen asked: its answer is the newer one.
+        boolean job_lost = sending.equals(SendJob.no_laptop);
+        if ((server != null) && !job_lost) {
+            laptop_text.setText("Laptop: " + server.host);
+        }
+        else {
+            laptop_text.setText(job_lost ? (SendJob.no_laptop + " — files wait on the phone") : laptop_state);
+        }
+        if (job_lost) {
+            sending = "";
+        }
         String queue;
         if (importing != null) {
             queue = importing;

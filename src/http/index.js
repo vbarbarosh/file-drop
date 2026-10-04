@@ -55,6 +55,12 @@ async function main()
 {
     group_uid = log_group_spawn();
 
+    // In docker node is pid 1, which has no default action for a signal:
+    // without these, Ctrl-C and docker stop do nothing. A part file left
+    // mid-upload is resumed by the phone.
+    process.on('SIGINT', () => process.exit(0));
+    process.on('SIGTERM', () => process.exit(0));
+
     await fs_mkdirp(uploads_dir);
     await uploads_remove_old();
 
