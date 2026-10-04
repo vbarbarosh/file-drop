@@ -29,6 +29,14 @@ public class Sender
         }
         listener.on_server(server);
 
+        // Android takes the time back mid-file: the upload stops at once.
+        Uploader.Progress progress = (item, sent, size) -> {
+            if (stop.get()) {
+                throw new Uploader.Stopped();
+            }
+            listener.on_progress(item, sent, size);
+        };
+
         while (true) {
             List<OutboxItem> items = outbox.list();
             if (items.isEmpty()) {
@@ -41,7 +49,7 @@ public class Sender
                 }
                 listener.on_item_begin(item, items.size() - i);
                 try {
-                    String saved = Uploader.send(server.url, item, listener);
+                    String saved = Uploader.send(server.url, item, progress);
                     outbox.remove(item);
                     listener.on_item_sent(item, saved);
                 }
@@ -50,7 +58,7 @@ public class Sender
                     outbox.remove(item);
                     listener.on_item_failed(item, error);
                 }
-                catch (InterruptedException error) {
+                catch (Uploader.Stopped | InterruptedException error) {
                     return Result.stopped;
                 }
                 catch (Exception error) {

@@ -97,10 +97,12 @@ async function main()
 }
 
 // GET /upload/:id
-// How much of the upload the server holds, and where it went once complete.
+// How much of the upload the server holds, where it went once complete, and
+// whether a connection still holds it: a phone that lost the wifi mid-file
+// comes back before the server gives up on the old connection.
 async function upload_get(req, res, id)
 {
-    upload_answer(res, 200, {offset: await fs_size_enoent(part_path_of(id)), saved: await done_read(id)});
+    upload_answer(res, 200, {offset: await fs_size_enoent(part_path_of(id)), saved: await done_read(id), busy: busy_ids.has(id)});
 }
 
 // POST /upload/:id (body, header:x-upload-offset, header:x-file-size,
@@ -365,6 +367,9 @@ function upload_answer(res, status, body)
     const headers = {'content-type': 'application/json', 'x-upload-offset': String(body.offset ?? 0)};
     if (body.saved) {
         headers['x-file-saved'] = encodeURIComponent(body.saved);
+    }
+    if (body.busy) {
+        headers['x-upload-busy'] = '1';
     }
     res.writeHead(status, headers);
     res.end(JSON.stringify(body));

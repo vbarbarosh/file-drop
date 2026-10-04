@@ -51,7 +51,7 @@ test('a finished upload sent again changes nothing', async function () {
     const again = await upload_whole(id, 'note.txt', 'hello');
     assert.deepStrictEqual(again, {offset: 5, saved: `${day}/note.txt`});
     assert.ok(!fs.existsSync(fs_path_join(data_dir, day, 'note_2.txt')));
-    assert.deepStrictEqual(await upload_state(id), {offset: 0, saved: `${day}/note.txt`});
+    assert.deepStrictEqual(await upload_state(id), {offset: 0, saved: `${day}/note.txt`, busy: false});
 });
 
 test('the same file under a new id is stored once', async function () {
@@ -97,7 +97,7 @@ test('an upload sent in two parts continues from the offset', async function () 
     const body = crypto.randomBytes(100000);
     const first = await upload_part(id, 'video.mp4', body, 0, 40000);
     assert.deepStrictEqual(first, {offset: 40000, saved: null});
-    assert.deepStrictEqual(await upload_state(id), {offset: 40000, saved: null});
+    assert.deepStrictEqual(await upload_state(id), {offset: 40000, saved: null, busy: false});
     const second = await upload_part(id, 'video.mp4', body, 40000, body.length);
     assert.strictEqual(second.saved, `${day}/video.mp4`);
     assert.ok(fs.readFileSync(fs_path_join(data_dir, day, 'video.mp4')).equals(body));
@@ -121,10 +121,24 @@ test('a connection cut mid-file keeps what arrived', async function () {
     const body = crypto.randomBytes(300000);
     await upload_cut(id, 'cut.bin', body, 120000);
     const state = await upload_state_settled(id, 120000);
-    assert.deepStrictEqual(state, {offset: 120000, saved: null});
+    assert.deepStrictEqual(state, {offset: 120000, saved: null, busy: false});
     const answer = await upload_part(id, 'cut.bin', body, 120000, body.length);
     assert.strictEqual(answer.saved, `${day}/cut.bin`);
     assert.ok(fs.readFileSync(fs_path_join(data_dir, day, 'cut.bin')).equals(body));
+});
+
+test('an upload in progress shows as busy', async function () {
+    const id = upload_id();
+    const body = crypto.randomBytes(100000);
+    const headers = {...upload_headers('slow.bin', body.length, 0), 'content-length': String(body.length)};
+    const req = http.request(`${base_url}/upload/${id}`, {headers, method: 'POST'});
+    req.on('error', ignore);
+    req.write(body.subarray(0, 1000));
+    await new Promise(v => setTimeout(v, 100));
+    assert.strictEqual((await upload_state(id)).busy, true);
+    req.end(body.subarray(1000));
+    await upload_state_settled(id, body.length);
+    assert.strictEqual((await upload_state(id)).saved, `${day}/slow.bin`);
 });
 
 test('an upload with no size is refused', async function () {
@@ -199,7 +213,7 @@ async function upload_state_settled(id, offset)
 {
     for (let i = 0; i < 50; ++i) {
         const state = await upload_state(id);
-        if (state.offset === offset) {
+        if ((state.offset === offset) && !state.busy) {
             return state;
         }
         await new Promise(v => setTimeout(v, 20));

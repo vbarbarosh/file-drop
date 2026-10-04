@@ -40,6 +40,7 @@ public final class SenderTest
             test_discovery_finds_the_server();
             test_cut_connections_resume();
             test_lost_server_keeps_the_item();
+            test_stop_ends_the_upload_mid_file();
             test_outbox_add_failure_leaves_nothing();
         }
         finally {
@@ -146,6 +147,38 @@ public final class SenderTest
         }
         finally {
             proxy.close();
+            server.destroy();
+        }
+    }
+
+    // Android stops the job: the upload ends mid-file and the next run goes on.
+    private static void test_stop_ends_the_upload_mid_file() throws Exception
+    {
+        int port = free_port();
+        File data = new File(work, "data-6");
+        Process server = server_start(port, data);
+        try {
+            Outbox outbox = new Outbox(new File(work, "outbox-6"));
+            byte[] video = random_bytes(8_000_000);
+            outbox.add(new ByteArrayInputStream(video), "stopped.mp4", 1_700_000_000_000L, "2026-10-05");
+            AtomicBoolean stop = new AtomicBoolean();
+            Recorder stopper = new Recorder() {
+                @Override
+                public void on_progress(OutboxItem item, long sent_bytes, long size)
+                {
+                    if (sent_bytes > 2_000_000) {
+                        stop.set(true);
+                    }
+                }
+            };
+            Sender.Result stopped = Sender.run(outbox, "http://127.0.0.1:" + port, stopper, stop);
+            check(stopped == Sender.Result.stopped, "stopped: " + stopped);
+            check(outbox.list().size() == 1, "a stopped item stays");
+            Sender.Result next = Sender.run(outbox, "http://127.0.0.1:" + port, new Recorder(), new AtomicBoolean());
+            check(next == Sender.Result.sent_all, "next run: " + next);
+            check(Arrays.equals(Files.readAllBytes(new File(data, "2026-10-05/stopped.mp4").toPath()), video), "the stopped file arrives whole");
+        }
+        finally {
             server.destroy();
         }
     }

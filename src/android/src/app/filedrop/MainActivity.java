@@ -295,6 +295,9 @@ public class MainActivity extends Activity
 
     private void server_found(Server found)
     {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
         server = found;
         if (found == null) {
             laptop_state = "no laptop on this wifi — files wait on the phone";
