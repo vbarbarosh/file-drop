@@ -171,7 +171,7 @@ public class MainActivity extends Activity
         text_button.setOnClickListener(view -> click_text());
 
         theme_apply();
-        staging_rescue();
+        staging_rescue(saved_state != null);
         outbox.remove_stale_tmp();
         notification_permission_ask();
         report("app-started", Build.MODEL + " android " + Build.VERSION.RELEASE);
@@ -193,6 +193,17 @@ public class MainActivity extends Activity
     {
         ui_handler.removeCallbacks(ticker);
         super.onPause();
+    }
+
+    // Android hands an app in the background silence from the microphone:
+    // leaving the screen ends the recording and keeps what was said.
+    @Override
+    protected void onStop()
+    {
+        if (recorder != null) {
+            voice_stop(true);
+        }
+        super.onStop();
     }
 
     @Override
@@ -288,6 +299,7 @@ public class MainActivity extends Activity
     {
         String saved = Settings.server(this);
         new Thread(() -> {
+            Wifi.bind(this);
             Server found = Server.find(saved);
             runOnUiThread(() -> server_found(found));
         }).start();
@@ -327,7 +339,7 @@ public class MainActivity extends Activity
     private void click_server()
     {
         EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         input.setHint("http://192.168.1.23:8080");
         input.setText(Settings.server(this));
         new AlertDialog.Builder(this, dialog_theme())
@@ -370,18 +382,37 @@ public class MainActivity extends Activity
         new Thread(() -> {
             try {
                 HttpURLConnection connection = (HttpURLConnection) new URL(url + "/file-drop.apk").openConnection();
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(30000);
-                InputStream in = connection.getInputStream();
-                FileOutputStream out = new FileOutputStream(new File(getCacheDir(), "update.apk"));
-                byte[] chunk = new byte[65536];
-                int read;
-                while ((read = in.read(chunk)) > 0) {
-                    out.write(chunk, 0, read);
+                long written = 0;
+                long expected;
+                try {
+                    connection.setConnectTimeout(5000);
+                    connection.setReadTimeout(30000);
+                    if (connection.getResponseCode() != 200) {
+                        throw new Exception("http " + connection.getResponseCode());
+                    }
+                    expected = connection.getContentLengthLong();
+                    InputStream in = connection.getInputStream();
+                    FileOutputStream out = new FileOutputStream(new File(getCacheDir(), "update.apk"));
+                    try {
+                        byte[] chunk = new byte[65536];
+                        int read;
+                        while ((read = in.read(chunk)) > 0) {
+                            out.write(chunk, 0, read);
+                            written += read;
+                        }
+                    }
+                    finally {
+                        out.close();
+                        in.close();
+                    }
                 }
-                out.close();
-                in.close();
-                connection.disconnect();
+                finally {
+                    connection.disconnect();
+                }
+                // A cut download would reach the installer as "problem parsing the package".
+                if ((expected >= 0) && (written != expected)) {
+                    throw new Exception("download cut at " + written + " of " + expected + " bytes");
+                }
                 runOnUiThread(this::update_install);
             }
             catch (Exception error) {
@@ -544,11 +575,16 @@ public class MainActivity extends Activity
         refresh();
     }
 
-    // A photo or a recording left in staging by a process that died is
-    // still a file the user made: it joins the outbox.
-    private void staging_rescue()
+    // A photo left in staging by a process that died is still a photo the
+    // user took: it joins the outbox. The camera's result still comes to a
+    // screen restored after the process died, so its photo waits for it.
+    // A recording cut off by a dying process has no index and does not play.
+    private void staging_rescue(boolean restored)
     {
-        String pending = Settings.prefs(this).getString("camera_pending", null);
+        String pending = restored ? Settings.prefs(this).getString("camera_pending", null) : null;
+        if (!restored) {
+            Settings.prefs(this).edit().remove("camera_pending").apply();
+        }
         File[] files = outbox.staging_dir().listFiles();
         if (files == null) {
             return;
@@ -557,7 +593,7 @@ public class MainActivity extends Activity
             if (file.getName().equals(pending)) {
                 continue;
             }
-            if (file.length() > 0) {
+            if ((file.length() > 0) && !file.getName().startsWith("voice_")) {
                 Importer.add_staged(this, file, file.getName(), null);
             }
             else {

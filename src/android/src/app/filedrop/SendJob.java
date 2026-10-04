@@ -11,6 +11,7 @@ import android.app.job.JobService;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.SystemClock;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -30,7 +31,9 @@ public class SendJob extends JobService
     static volatile String status = "";
     static volatile String server_host = null;
 
-    private final AtomicBoolean stop = new AtomicBoolean();
+    // One flag per run: a run Android stopped may still be blocked on the
+    // network when the next one starts, and must not be revived by it.
+    private AtomicBoolean stop = new AtomicBoolean();
 
     // A file was added, or the screen opened: try now, the waits start over.
     public static void kick(Context context)
@@ -43,12 +46,16 @@ public class SendJob extends JobService
 
     static void schedule(Context context, long delay_ms)
     {
-        JobInfo job = new JobInfo.Builder(job_id, new ComponentName(context, SendJob.class))
-            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+        JobInfo.Builder builder = new JobInfo.Builder(job_id, new ComponentName(context, SendJob.class))
             .setMinimumLatency(delay_ms)
-            .setPersisted(true)
-            .build();
-        context.getSystemService(JobScheduler.class).schedule(job);
+            .setPersisted(true);
+        if (Build.VERSION.SDK_INT >= 28) {
+            builder.setRequiredNetwork(Wifi.request());
+        }
+        else {
+            builder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED);
+        }
+        context.getSystemService(JobScheduler.class).schedule(builder.build());
     }
 
     static void channel_create(Context context)
@@ -61,8 +68,9 @@ public class SendJob extends JobService
     public boolean onStartJob(JobParameters params)
     {
         running = true;
-        stop.set(false);
-        new Thread(() -> run(params)).start();
+        AtomicBoolean run_stop = new AtomicBoolean();
+        stop = run_stop;
+        new Thread(() -> run(params, run_stop)).start();
         return true;
     }
 
@@ -74,12 +82,13 @@ public class SendJob extends JobService
         return true;
     }
 
-    private void run(JobParameters params)
+    private void run(JobParameters params, AtomicBoolean run_stop)
     {
         channel_create(this);
+        Wifi.bind(this);
         Outbox outbox = Settings.outbox(this);
         Listener listener = new Listener();
-        Sender.Result result = Sender.run(outbox, Settings.server(this), listener, stop);
+        Sender.Result result = Sender.run(outbox, Settings.server(this), listener, run_stop);
         running = false;
 
         int left = outbox.count();
@@ -103,8 +112,9 @@ public class SendJob extends JobService
         Settings.prefs(this).edit().putInt("retry_step", step + 1).apply();
         status = (result == Sender.Result.no_server) ? "no laptop on this wifi" : "connection lost";
         notice(notice_sending, plural(left, "file") + " waiting for the laptop", false, -1);
-        schedule(this, delay_ms);
+        // Scheduling our own id while it runs would stop it: finish first.
         jobFinished(params, false);
+        schedule(this, delay_ms);
     }
 
     private class Listener implements Sender.Listener

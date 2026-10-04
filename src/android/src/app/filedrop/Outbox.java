@@ -53,7 +53,7 @@ public class Outbox
             }
             return item_commit(tmp, path, size, mtime, day);
         }
-        catch (IOException error) {
+        catch (IOException | RuntimeException error) {
             delete_tree(tmp);
             throw error;
         }

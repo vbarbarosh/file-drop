@@ -34,9 +34,16 @@ public class ShareActivity extends Activity
         setContentView(status);
         ui_handler = new Handler(getMainLooper());
 
+        // Recreated (split screen, a theme change): the import already runs.
+        if (saved_state != null) {
+            ui_handler.post(ticker);
+            return;
+        }
+
         Intent intent = getIntent();
         List<Uri> uris = shared_uris(intent);
-        String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+        CharSequence shared_text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+        String text = (shared_text == null) ? null : shared_text.toString();
         if (!uris.isEmpty()) {
             Importer.add_documents(this, uris, this::import_done);
             ui_handler.post(ticker);
@@ -50,6 +57,15 @@ public class ShareActivity extends Activity
         }
         toast("nothing to send");
         finish();
+    }
+
+    // Closing the window would take back the read access the sharing app gave.
+    @Override
+    public void onBackPressed()
+    {
+        if (Importer.status == null) {
+            super.onBackPressed();
+        }
     }
 
     @Override

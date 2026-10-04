@@ -116,6 +116,7 @@ public class Importer
         Outbox outbox = Settings.outbox(app);
         String day = Outbox.today();
         int added = 0;
+        boolean kicked = false;
         String failed = null;
         for (int i = 0; i < entries.size(); ++i) {
             Entry entry = entries.get(i);
@@ -134,8 +135,9 @@ public class Importer
                 failed = "cannot add " + entry.path + ": " + error.getMessage();
             }
             // The first files can go while the rest are still copied.
-            if (added == 1) {
+            if ((added == 1) && !kicked) {
                 SendJob.kick(app);
+                kicked = true;
             }
         }
         status = null;
