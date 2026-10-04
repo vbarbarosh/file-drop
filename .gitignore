@@ -1,0 +1,8 @@
+node_modules/
+src/android/build/
+src/android/file-drop.apk
+src/android/file-drop.apk.idsig
+src/android/keystore
+src/android/toolchain/
+src/http/public/apk-version.txt
+src/http/public/file-drop.apk

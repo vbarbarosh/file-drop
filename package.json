@@ -1,0 +1,11 @@
+{
+  "name": "file-drop",
+  "private": true,
+  "scripts": {
+    "start": "node src/http/index.js",
+    "test": "node --test 'src/**/*.test.js'"
+  },
+  "dependencies": {
+    "@vbarbarosh/node-helpers": "^3.78.0"
+  }
+}
