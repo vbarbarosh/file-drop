@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# http://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin
+# http://redsymbol.net/articles/unofficial-bash-strict-mode
+set -o nounset -o errexit -o pipefail
+
+script=`realpath $0`
+scriptdir=`dirname $script`
+scriptname=`basename $script`
+
+BLACK="\e[30m" RED="\e[31m" GREEN="\e[32m" YELLOW="\e[33m" BLUE="\e[34m"
+PURPLE="\e[35m" CYAN="\e[36m" WHITE="\e[37m" RESET="\e[0m"
+
+EXIT_MESSAGE="${RED}src/android/bin/test failed${RESET}"
+
+# http://redsymbol.net/articles/bash-exit-traps/
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/#essential-cleanup
+tempdir=`mktemp -d -t tmp.XXXXXXXXXX`
+trap 'rm -rf $tempdir; echo -e "$EXIT_MESSAGE"' EXIT
+cd $tempdir
+
+cd $scriptdir/..
+
+android=${ANDROID:-$PWD/toolchain}
+
+# The sending core is plain Java, no android.jar on the classpath: it runs
+# on the JVM against the real server (node src/http/index.js), the same
+# classes the app runs. File names on the laptop are UTF-8.
+"$android/jdk/bin/javac" -encoding UTF-8 -d "$tempdir" \
+    src/app/filedrop/Discovery.java \
+    src/app/filedrop/Outbox.java \
+    src/app/filedrop/OutboxItem.java \
+    src/app/filedrop/Sender.java \
+    src/app/filedrop/Server.java \
+    src/app/filedrop/Uploader.java \
+    tests/app/filedrop/SenderTest.java
+LC_ALL=C.UTF-8 "$android/jdk/bin/java" -cp "$tempdir" app.filedrop.SenderTest ../..
+
+EXIT_MESSAGE="${GREEN}src/android/bin/test succeeded${RESET}"
