@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# http://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin
+# http://redsymbol.net/articles/unofficial-bash-strict-mode
+set -o nounset -o errexit -o pipefail
+
+script=`realpath $0`
+scriptdir=`dirname $script`
+scriptname=`basename $script`
+
+BLACK="\e[30m" RED="\e[31m" GREEN="\e[32m" YELLOW="\e[33m" BLUE="\e[34m"
+PURPLE="\e[35m" CYAN="\e[36m" WHITE="\e[37m" RESET="\e[0m"
+
+EXIT_MESSAGE="${RED}bin/run failed${RESET}"
+
+# http://redsymbol.net/articles/bash-exit-traps/
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/#essential-cleanup
+tempdir=`mktemp -d -t tmp.XXXXXXXXXX`
+trap 'rm -rf $tempdir; echo -e "$EXIT_MESSAGE"' EXIT
+cd $tempdir
+
+cd $scriptdir/..
+
+# Files land in data/ of this checkout, by day: data/2026-10-05/IMG_0001.jpg.
+data_dir=$PWD/data
+mkdir -p $data_dir
+
+PORT=${PORT:-8080}
+
+tty=()
+if test -t 0; then
+    tty=(-t)
+fi
+
+# The container shares the host network: the phone's discovery broadcast
+# reaches it, and its startup log prints the laptop's LAN address, the one
+# the phone opens; behind -p it would print the container's address.
+#
+# The container writes to data/ as the current user. Rootless podman maps
+# container uid 1000 to a subuid, so -u leaves the folder read-only there;
+# --userns=keep-id maps the host user instead.
+if docker --version | grep -q podman; then
+    user=(--userns=keep-id)
+else
+    user=(-u `id -u`:`id -g`)
+fi
+
+docker run --rm -i "${tty[@]}" \
+    --network host \
+    -e PORT=$PORT \
+    -v "$data_dir:/app/data" \
+    "${user[@]}" \
+    file-drop
+
+EXIT_MESSAGE="${GREEN}bin/run succeeded${RESET}"

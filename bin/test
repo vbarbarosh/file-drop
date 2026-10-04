@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# http://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin
+# http://redsymbol.net/articles/unofficial-bash-strict-mode
+set -o nounset -o errexit -o pipefail
+
+script=`realpath $0`
+scriptdir=`dirname $script`
+scriptname=`basename $script`
+
+BLACK="\e[30m" RED="\e[31m" GREEN="\e[32m" YELLOW="\e[33m" BLUE="\e[34m"
+PURPLE="\e[35m" CYAN="\e[36m" WHITE="\e[37m" RESET="\e[0m"
+
+EXIT_MESSAGE="${RED}bin/test failed${RESET}"
+
+# http://redsymbol.net/articles/bash-exit-traps/
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/#essential-cleanup
+tempdir=`mktemp -d -t tmp.XXXXXXXXXX`
+trap 'rm -rf $tempdir; echo -e "$EXIT_MESSAGE"' EXIT
+cd $tempdir
+
+cd $scriptdir/..
+
+# The server tests start src/http/index.js on a free port; the android test
+# runs the app's sending core on the jvm against the same server.
+{
+    failed=()
+    echo "http] npm test"
+    if ! npm test 2>&1 | sed -u 's/^/http] /'; then
+        failed+=("npm test")
+    fi
+    echo ']'
+    echo "android] src/android/bin/test"
+    if ! src/android/bin/test 2>&1 | sed -u 's/^/android] /'; then
+        failed+=(src/android/bin/test)
+    fi
+    echo ']'
+    if test ${#failed[@]} -gt 0; then
+        echo "test] failed: ${failed[*]}"
+        exit 1
+    fi
+} | ts -s '[%M:%S' | sed 's/^\(\[[0-9][0-9]:[0-9][0-9]\) ]$/\1]/'
+
+EXIT_MESSAGE="${GREEN}bin/test succeeded${RESET}"

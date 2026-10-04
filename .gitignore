@@ -7,3 +7,4 @@ src/android/toolchain/
 src/http/public/apk-version.txt
 src/http/public/file-drop.apk
 src/android/apk-version.txt
+data/

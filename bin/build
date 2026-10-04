@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# http://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin
+# http://redsymbol.net/articles/unofficial-bash-strict-mode
+set -o nounset -o errexit -o pipefail
+
+script=`realpath $0`
+scriptdir=`dirname $script`
+scriptname=`basename $script`
+
+BLACK="\e[30m" RED="\e[31m" GREEN="\e[32m" YELLOW="\e[33m" BLUE="\e[34m"
+PURPLE="\e[35m" CYAN="\e[36m" WHITE="\e[37m" RESET="\e[0m"
+
+EXIT_MESSAGE="${RED}bin/build failed${RESET}"
+
+# http://redsymbol.net/articles/bash-exit-traps/
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/#essential-cleanup
+tempdir=`mktemp -d -t tmp.XXXXXXXXXX`
+trap 'rm -rf $tempdir; echo -e "$EXIT_MESSAGE"' EXIT
+cd $tempdir
+
+cd $scriptdir/..
+
+# Builds the apk, then the docker image. The image builds the apk again from
+# the same sources and the same keystore (see Dockerfile), so it always serves
+# the current app; the local build makes src/android/keystore on the first
+# run. The image is tagged file-drop and file-drop:apk-<versionCode>.
+#
+# One shared clock for the whole run, as in bin/configure.
+{
+    src/android/bin/build 2>&1 | sed -u 's/^/android] /'
+    echo ']'
+    docker build -t file-drop -t file-drop:apk-`cat src/android/apk-version.txt` . 2>&1 | sed -u 's/^/docker] /'
+} | ts -s '[%M:%S' | sed 's/^\(\[[0-9][0-9]:[0-9][0-9]\) ]$/\1]/'
+
+EXIT_MESSAGE="${GREEN}bin/build succeeded${RESET}"

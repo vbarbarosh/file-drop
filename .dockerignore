@@ -1,0 +1,16 @@
+**/node_modules
+*.test.js
+.dockerignore
+.git
+.gitignore
+Dockerfile
+data
+docs
+img
+notes
+src/android/build
+src/android/file-drop.apk
+src/android/file-drop.apk.idsig
+src/android/toolchain
+src/http/public/apk-version.txt
+src/http/public/file-drop.apk
