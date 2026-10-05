@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 // When the wifi drops broadcasts, the laptop is still one of the 254
 // addresses next to the phone's own: each gets GET /info, 64 at a time.
@@ -17,6 +18,10 @@ import java.util.concurrent.Future;
 public class Scan
 {
     private static final int threads = 64;
+
+    // What the search is doing now, for the screen: "asking the wifi…",
+    // "scanning 192.168.1.x · 120 of 254", or null when no search runs.
+    public static volatile String progress = null;
 
     // Every File Drop server on the phone's own /24 networks, by address.
     public static List<Server> run(int port, int connect_ms)
@@ -29,12 +34,24 @@ public class Scan
     {
         List<Server> out = new ArrayList<>();
         ExecutorService executor = Executors.newFixedThreadPool(threads);
+        AtomicInteger done = new AtomicInteger();
+        int total = prefixes.size()*254;
+        List<String> networks = new ArrayList<>();
+        for (String prefix : prefixes) {
+            networks.add(prefix + "x");
+        }
+        String scanning = "scanning " + String.join(", ", networks);
+        progress = scanning + " · 0 of " + total;
         try {
             List<Future<Server>> answers = new ArrayList<>();
             for (String prefix : prefixes) {
                 for (int i = 1; i <= 254; ++i) {
                     String url = "http://" + prefix + i + ":" + port;
-                    answers.add(executor.submit(() -> Server.info(url, connect_ms)));
+                    answers.add(executor.submit(() -> {
+                        Server server = Server.info(url, connect_ms);
+                        progress = scanning + " · " + done.incrementAndGet() + " of " + total;
+                        return server;
+                    }));
                 }
             }
             for (Future<Server> answer : answers) {
@@ -51,6 +68,7 @@ public class Scan
         }
         finally {
             executor.shutdownNow();
+            progress = null;
         }
         return out;
     }

@@ -107,9 +107,31 @@ public final class SenderTest
         int port = free_port();
         Process server = server_start(port, new File(work, "data-7"));
         try {
+            // The screen shows the scan as it goes.
+            List<String> seen = new ArrayList<>();
+            Thread watcher = new Thread(() -> {
+                while (!Thread.currentThread().isInterrupted()) {
+                    String progress = Scan.progress;
+                    if ((progress != null) && !seen.contains(progress)) {
+                        seen.add(progress);
+                    }
+                    try {
+                        Thread.sleep(5);
+                    }
+                    catch (InterruptedException error) {
+                        return;
+                    }
+                }
+            });
+            watcher.start();
             long time0 = System.currentTimeMillis();
             List<Server> loopback = Scan.run(port, 700, Arrays.asList("127.0.0."));
             long elapsed = System.currentTimeMillis() - time0;
+            watcher.interrupt();
+            watcher.join();
+            check(seen.size() > 1, "the scan reported its progress: " + seen.size() + " states");
+            check(seen.get(0).startsWith("scanning 127.0.0.x · "), "progress reads: " + seen.get(0));
+            check(Scan.progress == null, "no progress once the scan is over");
             // On linux every 127.0.0.x is this machine, so all of them may answer.
             check(!loopback.isEmpty() && loopback.get(0).url.equals("http://127.0.0.1:" + port), "scan of 127.0.0.x: " + loopback.size());
             check(elapsed < 10000, "254 addresses in " + elapsed + " ms");

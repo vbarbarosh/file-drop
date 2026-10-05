@@ -275,7 +275,11 @@ public class MainActivity extends Activity
         String sending = SendJob.status;
         // The job tried after this screen asked: its answer is the newer one.
         boolean job_lost = sending.equals(SendJob.no_laptop);
-        if ((server != null) && !job_lost) {
+        String searching = Scan.progress;
+        if (searching != null) {
+            laptop_text.setText("Looking for the laptop: " + searching);
+        }
+        else if ((server != null) && !job_lost) {
             laptop_text.setText("Laptop: " + server.host);
         }
         else {

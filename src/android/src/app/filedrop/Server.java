@@ -47,14 +47,20 @@ public class Server
     public static List<Server> find_all(int port, String... extra_targets)
     {
         List<Server> out = new ArrayList<>();
-        String asked_url = Discovery.ask(port, 1500, extra_targets);
-        Server asked = (asked_url == null) ? null : info(asked_url);
-        if (asked != null) {
-            out.add(asked);
+        try {
+            Scan.progress = "asking the wifi…";
+            String asked_url = Discovery.ask(port, 1500, extra_targets);
+            Server asked = (asked_url == null) ? null : info(asked_url);
+            if (asked != null) {
+                out.add(asked);
+                return out;
+            }
+            out.addAll(Scan.run(port, 700));
             return out;
         }
-        out.addAll(Scan.run(port, 700));
-        return out;
+        finally {
+            Scan.progress = null;
+        }
     }
 
     // GET /info; null when nothing, or something that is not file-drop, answers.
