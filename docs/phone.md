@@ -28,7 +28,7 @@ defaults to 8080.
   `voice_<time>.m4a`.
 - **Choose files**: the system picker; select several at once.
 - **Choose folder**: a whole folder with its subfolders; the laptop keeps
-  the tree, `data/<day>/<folder>/...`.
+  the tree, `<folder>/...`.
 - **Send text**: what you typed goes as `note_<time>.txt`.
 - From any other app: **Share → File Drop** (several photos in the gallery,
   a PDF, a link).

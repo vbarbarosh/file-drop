@@ -6,18 +6,21 @@ belong to you.
 
 ## Folders
 
-    data/2026-10-05/photo_2026-10-05_09-14-03.jpg   by the day the phone took it in
-    data/2026-10-05/Trip/day 1/IMG_0042.jpg           a folder keeps its tree
-    data/.uploads/                                    uploads in progress, and done ids
+Files land in the directory `bin/run` was started from:
 
-The day is the phone's: a file collected offline on Monday and sent on
-Tuesday is in Monday's folder. A name already taken by other bytes gets a
-number, `photo_2.jpg`; the same bytes sent twice are stored once. The file
-keeps the phone's modification time.
+    cd ~/Downloads/phone && /path/to/file-drop/bin/run
 
-`data/.uploads/` holds a part file per unfinished upload (removed after a
-week) and a small `.done` file per finished one (removed after a month),
-which lets a phone that lost the answer ask again.
+    photo_2026-10-05_09-14-03.jpg     a file goes straight in
+    photo_2026-10-05_09-14-03_1.jpg   other bytes under a taken name: _1, _2, _3
+    Trip/day 1/IMG_0042.jpg           a picked folder keeps its tree
+
+Nothing is ever overwritten. The same bytes sent twice under one name are
+stored once. A file keeps the phone's modification time.
+
+The server's own state is in `data/uploads/` of the checkout, not in your
+folder: a part file per unfinished upload (removed after a week) and a
+small `.done` file per finished one (removed after a month), which lets a
+phone that lost the answer ask again.
 
 ## Port
 
@@ -33,8 +36,9 @@ port.
 Node.js 24:
 
     npm install
-    node src/http/index.js            # into data/
-    node src/http/index.js ~/Inbox    # into another folder
+    node src/http/index.js                    # into the current directory
+    node src/http/index.js ~/Inbox            # into another folder
+    node src/http/index.js ~/Inbox /tmp/fd    # its state elsewhere than data/uploads
 
 The page then has no app to offer until `src/android/bin/build` has run and
 `file-drop.apk` and `apk-version.txt` are copied into `src/http/public/`.

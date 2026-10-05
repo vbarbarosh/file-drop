@@ -4,7 +4,7 @@
 
 Whatever the app sends is first copied into its own storage, the outbox:
 one folder per file, `data` with the bytes and `meta.properties` with the
-path on the laptop, the size, the file's time and the day. A folder is
+path on the laptop, the size, the file's time and the day it was added. A folder is
 built under a `.tmp-` name and renamed when complete, so a half-copied
 file is never sent. Names start with the time they were added: files go
 in that order.
@@ -26,11 +26,12 @@ Each outbox item has an id, `20261005_091403_123_0001_1a2b3c4d`.
          x-file-size        the whole size
          x-file-path        relative path, encodeURIComponent
          x-file-mtime       ms since 1970
-         x-file-day         YYYY-MM-DD, the folder under data/
+         x-file-day         YYYY-MM-DD, the day it was added; not used now
 
-The server appends the body to `data/.uploads/<id>.part`. A lost
+The server appends the body to `data/uploads/<id>.part`. A lost
 connection leaves what arrived; the app asks `GET` and goes on from there.
-The last byte moves the part to `data/<day>/<path>` and records the id as
+The last byte moves the part to `<path>` in the drop folder (a taken name
+gets `_1`, `_2`; the same bytes are kept once) and records the id as
 done, so repeating a finished upload changes nothing. Only then does the
 app delete the file from the phone.
 

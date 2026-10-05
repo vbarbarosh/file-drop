@@ -15,16 +15,18 @@ while the laptop is away, and sends it the moment the laptop is back.
 
     bin/configure
     bin/build
-    bin/run
+    cd ~/Downloads/phone
+    /path/to/file-drop/bin/run
 
-`bin/run` starts the server; Ctrl-C stops it. Files land in `data/`, one
-folder per day: `data/2026-10-05/photo_2026-10-05_09-14-03.jpg`. The startup
-log prints the URL to open on the phone, where the page links to the app.
+`bin/run` starts the server; Ctrl-C stops it. Files land in the directory
+it was started from, under their own names; a name already taken gets
+`_1`, `_2`, and nothing is overwritten. The startup log prints the URL to
+open on the phone, where the page links to the app.
 
 ## Docs
 
 - [Phone](docs/phone.md): install the app, and what each button does
-- [Server](docs/server.md): ports, `data/`, running without docker
+- [Server](docs/server.md): the folder, ports, running without docker
 - [Android app](docs/android.md): the build, updates, the keystore
 - [How sending works](docs/protocol.md): the outbox, resumable uploads, discovery
 - [Troubleshooting](docs/troubleshooting.md)
