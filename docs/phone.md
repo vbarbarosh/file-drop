@@ -8,8 +8,11 @@
 3. Allow Chrome to install unknown apps when Android asks (once), install,
    open. Allow notifications: they show what is being sent.
 
-The app finds the laptop on the wifi by itself. **laptop** in the top right
-corner sets the address by hand, for a network that blocks the search.
+The app finds the laptop on the wifi by itself; the laptop's firewall
+needs only tcp 8080 open. **laptop** in the top right corner shows the
+phone's own address, **Find** searches again and lists what it found, and
+an address can be typed by hand: `192.168.1.23` is enough, the port
+defaults to 8080.
 
 ## Sending
 

@@ -10,8 +10,8 @@ downloads the toolchain once (JDK 17, build-tools 34, platform 34, about
 ## Parts
 
 - `Outbox`, `OutboxItem`: the files waiting on the phone, one folder each.
-- `Uploader`, `Sender`, `Server`, `Discovery`: finding the laptop and
-  sending; plain Java, tested on the JVM by `src/android/bin/test`.
+- `Uploader`, `Sender`, `Server`, `Discovery`, `Scan`: finding the laptop
+  and sending; plain Java, tested on the JVM by `src/android/bin/test`.
 - `SendJob`: the background job (JobScheduler) that empties the outbox.
 - `Importer`: copies picked, shared and recorded files into the outbox.
 - `MainActivity`, `ShareActivity`: the screen and the share target.

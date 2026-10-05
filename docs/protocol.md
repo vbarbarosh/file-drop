@@ -39,9 +39,16 @@ and a new connection can take the upload over.
 
 ## Finding the laptop
 
-The app tries the last address that answered. When it does not answer,
-the app sends `file-drop?` over udp to the broadcast addresses of the
-wifi, on the same port; the server answers with
-`{"name":"file-drop","host":...,"port":...}`, and the answer's source
-address is the laptop. `GET /info` then confirms it, and tells the apk
-version the laptop serves.
+The app tries the last address that answered. When it does not answer:
+
+1. It sends `file-drop?` over udp to the broadcast addresses of the wifi,
+   on the same port. The server answers with
+   `{"name":"file-drop","host":...,"port":...}`, and the answer's source
+   address is the laptop.
+2. No answer in 1.5 s (a firewall that lets only tcp in, a router that
+   drops broadcasts): it scans the phone's own network. Each of the 254
+   addresses next to its own gets `GET /info` on the port, 64 at a time,
+   in a few seconds. Only tcp is needed.
+
+**laptop → Find** in the app runs both and lists every File Drop server it
+found. `GET /info` confirms a server and tells the apk version it serves.

@@ -21,10 +21,12 @@ which lets a phone that lost the answer ask again.
 
 ## Port
 
-`PORT` changes it, default 8080: `PORT=9000 bin/run`. The same number is
-used on tcp (http) and udp (the app's search for the laptop); a firewall
-must let both in (`sudo ufw allow 8080` on Ubuntu). An app that knows the
-laptop on another port searches on that port.
+`PORT` changes it, default 8080: `PORT=9000 bin/run`. A firewall needs to
+let in only tcp on that port (`sudo ufw allow 8080/tcp` on Ubuntu). The
+server also answers the app's udp broadcast on the same number: open udp
+too and the app finds the laptop in a moment instead of a few seconds of
+scanning. An app that knows the laptop on another port searches on that
+port.
 
 ## Without docker
 
