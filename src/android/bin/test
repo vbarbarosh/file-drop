@@ -30,6 +30,7 @@ android=${ANDROID:-$PWD/toolchain}
     src/app/filedrop/Discovery.java \
     src/app/filedrop/Outbox.java \
     src/app/filedrop/OutboxItem.java \
+    src/app/filedrop/Scan.java \
     src/app/filedrop/Sender.java \
     src/app/filedrop/Server.java \
     src/app/filedrop/Uploader.java \

@@ -38,6 +38,7 @@ public final class SenderTest
         try {
             test_outbox_waits_for_the_server();
             test_discovery_finds_the_server();
+            test_scan_finds_the_server();
             test_cut_connections_resume();
             test_lost_server_keeps_the_item();
             test_stop_ends_the_upload_mid_file();
@@ -94,6 +95,33 @@ public final class SenderTest
             check(("http://127.0.0.1:" + port).equals(asked), "discovery answer: " + asked);
             Server info = Server.info(asked);
             check((info != null) && (info.apk_version == 0) && !info.host.isEmpty(), "info answers");
+        }
+        finally {
+            server.destroy();
+        }
+    }
+
+    // A wifi that drops broadcasts: the addresses next to ours are asked one by one.
+    private static void test_scan_finds_the_server() throws Exception
+    {
+        int port = free_port();
+        Process server = server_start(port, new File(work, "data-7"));
+        try {
+            long time0 = System.currentTimeMillis();
+            List<Server> loopback = Scan.run(port, 700, Arrays.asList("127.0.0."));
+            long elapsed = System.currentTimeMillis() - time0;
+            // On linux every 127.0.0.x is this machine, so all of them may answer.
+            check(!loopback.isEmpty() && loopback.get(0).url.equals("http://127.0.0.1:" + port), "scan of 127.0.0.x: " + loopback.size());
+            check(elapsed < 10000, "254 addresses in " + elapsed + " ms");
+            List<String> prefixes = Scan.local_prefixes();
+            check(!prefixes.isEmpty(), "this machine has a private network to scan");
+            List<Server> lan = Scan.run(port, 700, prefixes);
+            String own = Scan.local_addresses().get(0).getHostAddress();
+            boolean found_own = false;
+            for (Server each : lan) {
+                found_own = found_own || each.url.equals("http://" + own + ":" + port);
+            }
+            check(found_own, "scan of " + prefixes + " finds " + own + ": " + lan.size() + " found");
         }
         finally {
             server.destroy();

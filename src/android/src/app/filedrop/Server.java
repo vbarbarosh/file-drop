@@ -6,6 +6,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,7 +28,9 @@ public class Server
         this.apk_version = apk_version;
     }
 
-    // The saved address first; then the whole wifi is asked. Null: no laptop.
+    // The saved address first; then the whole wifi is asked; then, when
+    // the wifi drops broadcasts, the addresses next to the phone's are
+    // scanned. Null: no laptop.
     public static Server find(String saved_url, String... extra_targets)
     {
         if (saved_url != null) {
@@ -35,19 +39,35 @@ public class Server
                 return saved;
             }
         }
-        String found_url = Discovery.ask(port_of(saved_url), 1500, extra_targets);
-        if (found_url == null) {
-            return null;
+        List<Server> found = find_all(port_of(saved_url), extra_targets);
+        return found.isEmpty() ? null : found.get(0);
+    }
+
+    // Every laptop that answers: the broadcast's first, else the scan's.
+    public static List<Server> find_all(int port, String... extra_targets)
+    {
+        List<Server> out = new ArrayList<>();
+        String asked_url = Discovery.ask(port, 1500, extra_targets);
+        Server asked = (asked_url == null) ? null : info(asked_url);
+        if (asked != null) {
+            out.add(asked);
+            return out;
         }
-        return info(found_url);
+        out.addAll(Scan.run(port, 700));
+        return out;
     }
 
     // GET /info; null when nothing, or something that is not file-drop, answers.
     public static Server info(String url)
     {
+        return info(url, 3000);
+    }
+
+    public static Server info(String url, int connect_ms)
+    {
         try {
             HttpURLConnection connection = (HttpURLConnection) new URL(url + "/info").openConnection();
-            connection.setConnectTimeout(3000);
+            connection.setConnectTimeout(connect_ms);
             connection.setReadTimeout(5000);
             int code = connection.getResponseCode();
             String body = read_body(connection.getInputStream());

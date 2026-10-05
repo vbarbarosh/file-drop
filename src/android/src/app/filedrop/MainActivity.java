@@ -30,6 +30,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -350,18 +351,63 @@ public class MainActivity extends Activity
     {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        input.setHint("http://192.168.1.23:8080");
+        input.setHint("192.168.1.23:8080");
         input.setText(Settings.server(this));
+        List<String> phone_addresses = new ArrayList<>();
+        for (InetAddress address : Scan.local_addresses()) {
+            phone_addresses.add(address.getHostAddress());
+        }
+        String phone = phone_addresses.isEmpty() ? "" : ("\n\nThis phone: " + String.join(", ", phone_addresses));
         new AlertDialog.Builder(this, dialog_theme())
             .setTitle("Laptop address")
-            .setMessage("Found by itself on the same wifi. Type it only when it is not: the address bin/run prints.")
+            .setMessage("Find looks for File Drop on this wifi. Or type the address bin/run prints." + phone)
             .setView(input)
             .setPositiveButton("Save", (dialog, which) -> server_address_save(input.getText().toString()))
-            .setNeutralButton("Find again", (dialog, which) -> server_address_save(""))
+            .setNeutralButton("Find", (dialog, which) -> click_find())
             .setNegativeButton("Cancel", null)
             .show();
     }
 
+    // Every laptop on the wifi: one is taken, several are offered.
+    private void click_find()
+    {
+        int port = Server.port_of(Settings.server(this));
+        server = null;
+        laptop_state = "looking for the laptop on this wifi…";
+        refresh();
+        new Thread(() -> {
+            Wifi.bind(this);
+            List<Server> found = Server.find_all(port);
+            runOnUiThread(() -> servers_found(found));
+        }).start();
+    }
+
+    private void servers_found(List<Server> found)
+    {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        if (found.isEmpty()) {
+            laptop_state = "no laptop found — is bin/run running, on this wifi?";
+            refresh();
+            return;
+        }
+        if (found.size() == 1) {
+            server_address_save(found.get(0).url);
+            return;
+        }
+        String[] labels = new String[found.size()];
+        for (int i = 0; i < labels.length; ++i) {
+            labels[i] = found.get(i).host + " · " + found.get(i).url.replace("http://", "");
+        }
+        new AlertDialog.Builder(this, dialog_theme())
+            .setTitle("Which laptop?")
+            .setItems(labels, (dialog, which) -> server_address_save(found.get(which).url))
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    // "192.168.1.23" is taken as "http://192.168.1.23:8080".
     private void server_address_save(String typed)
     {
         String url = typed.trim();
@@ -370,6 +416,9 @@ public class MainActivity extends Activity
         }
         if (!url.isEmpty() && !url.startsWith("http")) {
             url = "http://" + url;
+        }
+        if (!url.isEmpty() && !url.substring(url.indexOf("//") + 2).contains(":")) {
+            url = url + ":" + Server.default_port;
         }
         Settings.server_save(this, url.isEmpty() ? null : url);
         server = null;
