@@ -1,6 +1,9 @@
 # File Drop
 
-![File Drop](img/cover-light.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="img/cover-dark.png">
+  <img alt="Project cover" src="img/cover.png">
+</picture>
 
 An Android app that only sends: take photos, record a voice note, pick
 files or a whole folder, type a text, and it all lands in a folder on your
