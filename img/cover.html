@@ -1,0 +1,288 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+:root {
+    --bg: #f3f5f4;
+    --fg: #141816;
+    --muted: #5b6662;
+    --accent: #1f8a70;
+    --accent-fg: #ffffff;
+    --card: #ffffff;
+    --card-border: #d5dcd9;
+    --phone: #1b211e;
+    --screen: #f3f5f4;
+}
+
+:root[data-theme='dark'] {
+    --bg: #121614;
+    --fg: #e6ebe8;
+    --muted: #96a39d;
+    --accent: #34b892;
+    --accent-fg: #0b1210;
+    --card: #1b211e;
+    --card-border: #2c3531;
+    --phone: #2c3531;
+    --screen: #121614;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    width: 1280px;
+    height: 640px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Inter', system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 48px;
+    padding: 56px 72px;
+    overflow: hidden;
+}
+
+.intro {
+    flex: 1;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+}
+
+.brand svg {
+    width: 92px;
+    height: 92px;
+    display: block;
+}
+
+.brand h1 {
+    font-family: 'Inter Display', 'Inter', system-ui, sans-serif;
+    font-size: 64px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.tagline {
+    margin-top: 34px;
+    max-width: 500px;
+    font-size: 26px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+.tagline b {
+    color: var(--fg);
+    font-weight: 600;
+}
+
+.features {
+    margin-top: 30px;
+    font-size: 18px;
+    color: var(--muted);
+}
+
+.features span {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.story {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+}
+
+.phone {
+    width: 236px;
+    height: 456px;
+    border-radius: 36px;
+    background: var(--phone);
+    padding: 12px;
+    flex: none;
+}
+
+.screen {
+    height: 100%;
+    border-radius: 26px;
+    background: var(--screen);
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.screen .title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.screen .status {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+}
+
+.screen .status .waiting {
+    margin-top: 4px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.screen .button {
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.screen .button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+}
+
+.screen .text {
+    height: 58px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--card);
+    padding: 9px 12px;
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+.flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.folder {
+    width: 330px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 18px 20px;
+}
+
+.folder .path {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'DejaVu Sans Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.folder .path svg {
+    width: 30px;
+    height: 30px;
+    flex: none;
+}
+
+.folder .file {
+    font-family: 'DejaVu Sans Mono', monospace;
+    font-size: 13.5px;
+    padding-top: 11px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.folder .file .kind {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex: none;
+}
+
+.folder .file.indent {
+    padding-left: 20px;
+}
+
+.folder .meta {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--muted);
+}
+</style>
+</head>
+<body>
+<div class="intro">
+    <div class="brand">
+        <svg viewBox="0 0 108 108">
+            <rect width="108" height="108" rx="24" fill="#1f8a70"/>
+            <path d="M54 26 v38 M40 50 l14 14 14-14" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M30 70 v8 a4 4 0 0 0 4 4 h40 a4 4 0 0 0 4-4 v-8" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h1>File Drop</h1>
+    </div>
+    <p class="tagline">Photos, voice, files and text from your Android phone
+        <b>land in a folder on your laptop</b>, over your own wifi.</p>
+    <p class="features">no cloud <span>·</span> waits for the laptop <span>·</span> resumes a dropped upload</p>
+</div>
+<div class="story">
+    <div class="phone">
+        <div class="screen">
+            <div class="title">File Drop</div>
+            <div class="status">
+                <div>Laptop: thinkpad</div>
+                <div class="waiting">sending photo · 64%</div>
+            </div>
+            <div class="button primary">Take photos</div>
+            <div class="button">Record voice</div>
+            <div class="button">Choose files</div>
+            <div class="button">Choose folder</div>
+            <div class="text">Text to send</div>
+        </div>
+    </div>
+    <div class="flow">
+        <svg width="44" height="24" viewBox="0 0 44 24" fill="none">
+            <path d="M2 12h36m0 0l-9-8m9 8l-9 8" stroke="var(--muted)" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>wifi</div>
+    </div>
+    <div class="folder">
+        <div class="path">
+            <svg viewBox="0 0 34 34" fill="none">
+                <path d="M3 8a3 3 0 013-3h7l4 4h11a3 3 0 013 3v14a3 3 0 01-3 3H6a3 3 0 01-3-3z"
+                    fill="var(--accent)" opacity="0.9"/>
+            </svg>
+            data/2026-10-05/
+        </div>
+        <div class="file"><div class="kind"></div>IMG_0042.jpg</div>
+        <div class="file"><div class="kind"></div>voice_09-14-03.m4a</div>
+        <div class="file"><div class="kind"></div>note_09-15-40.txt</div>
+        <div class="file"><div class="kind"></div>Trip/</div>
+        <div class="file indent"><div class="kind"></div>day 1/clip.mp4</div>
+        <div class="meta">under their own names, with the phone's time</div>
+    </div>
+</div>
+<script>
+document.documentElement.dataset.theme =
+    new URLSearchParams(location.search).get('theme') || 'light';
+</script>
+</body>
+</html>

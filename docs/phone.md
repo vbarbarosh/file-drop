@@ -1,5 +1,10 @@
 # Phone
 
+<p>
+<img alt="File Drop, light" src="../img/phone-light.png" width="240">
+<img alt="File Drop, dark" src="../img/phone-dark.png" width="240">
+</p>
+
 ## Install
 
 1. Phone and laptop on the same wifi; `bin/run` running on the laptop.

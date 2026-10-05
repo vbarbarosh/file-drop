@@ -1,9 +1,6 @@
 # File Drop
 
-<p>
-<img alt="File Drop, light" src="img/phone-light.png" width="240">
-<img alt="File Drop, dark" src="img/phone-dark.png" width="240">
-</p>
+![File Drop](img/cover-light.png)
 
 An Android app that only sends: take photos, record a voice note, pick
 files or a whole folder, type a text, and it all lands in a folder on your
