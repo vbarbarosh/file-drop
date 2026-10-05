@@ -6,6 +6,7 @@ const format_seconds = require('../helpers/format_seconds');
 const fs = require('fs');
 const fs_exists = require('@vbarbarosh/node-helpers/src/fs_exists');
 const fs_mkdirp = require('@vbarbarosh/node-helpers/src/fs_mkdirp');
+const fs_path_basename = require('@vbarbarosh/node-helpers/src/fs_path_basename');
 const fs_path_dirname = require('@vbarbarosh/node-helpers/src/fs_path_dirname');
 const fs_path_extname = require('@vbarbarosh/node-helpers/src/fs_path_extname');
 const fs_path_join = require('@vbarbarosh/node-helpers/src/fs_path_join');
@@ -28,8 +29,11 @@ const path = require('path');
 const stream_promises = require('stream/promises');
 
 const public_dir = fs_path_join(__dirname, 'public');
-const data_dir = (process.argv[2] === undefined) ? fs_path_resolve(__dirname, '../../data') : fs_path_resolve(process.argv[2]);
-const uploads_dir = fs_path_join(data_dir, '.uploads');
+// node index.js [drop_dir] [state_dir]: files land in drop_dir, the
+// current directory by default; uploads in progress and done ids are the
+// server's own state, kept in the project's data/ unless told otherwise.
+const drop_dir = (process.argv[2] === undefined) ? process.cwd() : fs_path_resolve(process.argv[2]);
+const uploads_dir = (process.argv[3] === undefined) ? fs_path_resolve(__dirname, '../../data/uploads') : fs_path_resolve(process.argv[3]);
 const port = Number(process.env.PORT ?? 8080);
 const discovery_question = 'file-drop?';
 const part_max_age_ms = 7*24*3600*1000;
@@ -61,28 +65,12 @@ async function main()
     process.on('SIGINT', () => process.exit(0));
     process.on('SIGTERM', () => process.exit(0));
 
+    await fs_mkdirp(drop_dir);
     await fs_mkdirp(uploads_dir);
     await uploads_remove_old();
 
     const server = http.createServer(function (req, res) {
-        const upload_match = req.url.match(/^\/upload\/([A-Za-z0-9_-]{8,64})$/);
-        if ((req.method === 'GET') && upload_match) {
-            upload_get(req, res, upload_match[1]);
-            return;
-        }
-        if ((req.method === 'POST') && upload_match) {
-            upload_post(req, res, upload_match[1]);
-            return;
-        }
-        if ((req.method === 'GET') && (req.url === '/info')) {
-            info_get(req, res);
-            return;
-        }
-        if ((req.method === 'POST') && (req.url === '/client-log')) {
-            client_log_post(req, res);
-            return;
-        }
-        static_get(req, res);
+        request_route(req, res).catch(error => request_failed(req, res, error));
     });
 
     // A video over wifi takes minutes: no limit on a whole request. A phone
@@ -92,7 +80,7 @@ async function main()
     server.timeout = 60000;
 
     server.listen(port, '0.0.0.0', function () {
-        log(group_uid, 'server_listen', `port=${port} dir=${format_log_value(data_dir)}`);
+        log(group_uid, 'server_listen', `port=${port} dir=${format_log_value(drop_dir)}`);
         // Open on the phone, on the same wifi.
         for (const url of list_lan_urls()) {
             log(group_uid, 'server_lan_url', url);
@@ -100,6 +88,40 @@ async function main()
     });
 
     discovery_listen();
+}
+
+async function request_route(req, res)
+{
+    const upload_match = req.url.match(/^\/upload\/([A-Za-z0-9_-]{8,64})$/);
+    if ((req.method === 'GET') && upload_match) {
+        await upload_get(req, res, upload_match[1]);
+        return;
+    }
+    if ((req.method === 'POST') && upload_match) {
+        await upload_post(req, res, upload_match[1]);
+        return;
+    }
+    if ((req.method === 'GET') && (req.url === '/info')) {
+        await info_get(req, res);
+        return;
+    }
+    if ((req.method === 'POST') && (req.url === '/client-log')) {
+        client_log_post(req, res);
+        return;
+    }
+    await static_get(req, res);
+}
+
+// One failed request is logged and answered 500; the server goes on.
+function request_failed(req, res, error)
+{
+    log(group_uid, 'request_failed', `method=${req.method} url=${format_log_value(req.url)} error=${format_log_value(error.message)}`);
+    if (res.headersSent) {
+        res.destroy();
+        return;
+    }
+    res.writeHead(500, {'content-type': 'application/json'});
+    res.end(JSON.stringify({error: 'server error'}));
 }
 
 // GET /upload/:id
@@ -112,10 +134,10 @@ async function upload_get(req, res, id)
 }
 
 // POST /upload/:id (body, header:x-upload-offset, header:x-file-size,
-//                   header:x-file-path, header:x-file-mtime, header:x-file-day)
+//                   header:x-file-path, header:x-file-mtime)
 // The body is the file from x-upload-offset on; it is appended to a part
 // file, so a connection lost mid-file continues where it stopped. The last
-// byte moves the part to data/<day>/<path>, and the id is remembered as done:
+// byte moves the part to <drop_dir>/<path>, and the id is remembered as done:
 // repeating a finished upload changes nothing.
 async function upload_post(req, res, id)
 {
@@ -173,7 +195,7 @@ async function upload_post(req, res, id)
     const placed = await place_serial(() => part_place(part_path, relative));
     await done_write(id, placed.saved);
     if (!placed.duplicate) {
-        await mtime_restore(fs_path_join(data_dir, placed.saved), req.headers['x-file-mtime']);
+        await mtime_restore(fs_path_join(drop_dir, placed.saved), req.headers['x-file-mtime']);
     }
     const sender = placed.duplicate ? 'upload_duplicate' : 'upload_saved';
     log(group_uid, sender, `file=${format_log_value(placed.saved)} bytes=${size} ${format_seconds(Date.now() - time0)}`);
@@ -248,19 +270,19 @@ function place_serial(fn)
     return out;
 }
 
-// photo.jpg, photo_2.jpg, photo_3.jpg...: the first free name wins. A name
-// already holding the same bytes means the file came before: the part goes.
+// The first free name wins. A name already holding the same bytes means the
+// file came before: the part goes.
 async function part_place(part_path, relative)
 {
     const digest = await fs_sha256(part_path);
     const part_size = await fs_size_enoent(part_path);
-    let counter = 1;
+    let counter = 0;
     while (true) {
         const candidate = name_numbered(relative, counter);
-        const candidate_path = fs_path_join(data_dir, candidate);
+        const candidate_path = fs_path_join(drop_dir, candidate);
         if (!(await fs_exists(candidate_path))) {
             await fs_mkdirp(fs_path_dirname(candidate_path));
-            await fs_rename(part_path, candidate_path);
+            await part_move(part_path, candidate_path);
             return {saved: candidate, duplicate: false};
         }
         const stat = await fs_stat(candidate_path);
@@ -270,6 +292,32 @@ async function part_place(part_path, relative)
         }
         counter += 1;
     }
+}
+
+// A rename, when the part and the drop folder share a disk. In docker they
+// are two mounts: the part is copied under a hidden name beside its place,
+// then renamed, so the folder still never shows a half-written file.
+async function part_move(part_path, file_path)
+{
+    try {
+        await fs_rename(part_path, file_path);
+        return;
+    }
+    catch (error) {
+        if (error.code !== 'EXDEV') {
+            throw error;
+        }
+    }
+    const tmp_path = fs_path_join(fs_path_dirname(file_path), `.file-drop-${fs_path_basename(part_path)}`);
+    try {
+        await fs.promises.copyFile(part_path, tmp_path);
+        await fs_rename(tmp_path, file_path);
+    }
+    catch (error) {
+        await fs_rmf(tmp_path);
+        throw error;
+    }
+    await fs_rmf(part_path);
 }
 
 // The phone's own time of the file, so the folder sorts by when a photo was taken.
@@ -298,12 +346,10 @@ async function uploads_remove_old()
     }
 }
 
-// data/<day>/<path>: the day is the phone's, the day the file was added to
-// its outbox, so a file sent late still sits with its day.
+// The path the phone sent, safe inside drop_dir: a file goes straight in,
+// a picked folder keeps its tree.
 function upload_relative_path(req, id)
 {
-    const header_day = req.headers['x-file-day'] ?? '';
-    const day = /^\d{4}-\d\d-\d\d$/.test(header_day) ? header_day : format_today();
     let decoded = req.headers['x-file-path'] ?? '';
     try {
         decoded = decodeURIComponent(decoded);
@@ -312,12 +358,13 @@ function upload_relative_path(req, id)
         // a raw name with a stray %, kept as it came
     }
     const relative = file_path_sanitize(decoded);
-    return `${day}/${(relative === '') ? `file_${id}` : relative}`;
+    return (relative === '') ? `file_${id}` : relative;
 }
 
+// photo.jpg, then photo_1.jpg, photo_2.jpg: a file is never overwritten.
 function name_numbered(relative, counter)
 {
-    if (counter === 1) {
+    if (counter === 0) {
         return relative;
     }
     const ext = fs_path_extname(relative);
@@ -397,17 +444,6 @@ function format_phone_report(body)
         return `invalid=${format_log_value(body.slice(0, 200))}`;
     }
     return `version=${format_log_value(report.version)} event=${format_log_value(report.event)} detail=${format_log_value(report.detail)}`;
-}
-
-function format_today()
-{
-    const now = new Date();
-    return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-}
-
-function pad2(value)
-{
-    return String(value).padStart(2, '0');
 }
 
 function list_lan_urls()

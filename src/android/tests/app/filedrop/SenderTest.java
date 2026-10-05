@@ -72,11 +72,11 @@ public final class SenderTest
             check(online == Sender.Result.sent_all, "server: " + online);
             check(outbox.list().isEmpty(), "sent files leave the phone");
             check(recorder.sent.equals(Arrays.asList(
-                "2026-10-05/note_2026-10-05_00-30-00.txt",
-                "2026-10-05/photo 1.jpg",
-                "2026-10-05/Trip/день 1/photo 1.jpg")), "sent in order: " + recorder.sent);
-            check(Arrays.equals(Files.readAllBytes(new File(data, "2026-10-05/Trip/день 1/photo 1.jpg").toPath()), photo), "a folder file arrives whole");
-            check(new File(data, "2026-10-05/photo 1.jpg").lastModified() == 1_700_000_000_000L, "the phone time is kept");
+                "note_2026-10-05_00-30-00.txt",
+                "photo 1.jpg",
+                "Trip/день 1/photo 1.jpg")), "sent in order: " + recorder.sent);
+            check(Arrays.equals(Files.readAllBytes(new File(data, "Trip/день 1/photo 1.jpg").toPath()), photo), "a folder file arrives whole");
+            check(new File(data, "photo 1.jpg").lastModified() == 1_700_000_000_000L, "the phone time is kept");
         }
         finally {
             server.destroy();
@@ -164,7 +164,7 @@ public final class SenderTest
             Sender.Result result = Sender.run(outbox, "http://127.0.0.1:" + proxy.port, new Recorder(), new AtomicBoolean());
             check(result == Sender.Result.sent_all, "cut connections: " + result);
             check(proxy.cuts.get() >= 5, "the proxy did cut: " + proxy.cuts.get());
-            check(Arrays.equals(Files.readAllBytes(new File(data, "2026-10-05/video.mp4").toPath()), video), "the video arrives whole");
+            check(Arrays.equals(Files.readAllBytes(new File(data, "video.mp4").toPath()), video), "the video arrives whole");
         }
         finally {
             proxy.close();
@@ -189,10 +189,10 @@ public final class SenderTest
             check(lost == Sender.Result.connection_lost, "lost server: " + lost);
             check(outbox.list().size() == 1, "the item stays on the phone");
             check(recorder.failed.size() == 1, "the failure is reported");
-            check(new File(data, ".uploads/" + outbox.list().get(0).id + ".part").length() > 0, "the server kept the first part");
+            check(new File(data.getPath() + "-uploads", outbox.list().get(0).id + ".part").length() > 0, "the server kept the first part");
             Sender.Result back = Sender.run(outbox, "http://127.0.0.1:" + port, recorder, new AtomicBoolean());
             check(back == Sender.Result.sent_all, "server back: " + back);
-            check(Arrays.equals(Files.readAllBytes(new File(data, "2026-10-05/lost.mp4").toPath()), video), "the file arrives whole");
+            check(Arrays.equals(Files.readAllBytes(new File(data, "lost.mp4").toPath()), video), "the file arrives whole");
             check(recorder.progress_first_after_resume >= 1_000_000, "the second run resumed at " + recorder.progress_first_after_resume);
         }
         finally {
@@ -226,7 +226,7 @@ public final class SenderTest
             check(outbox.list().size() == 1, "a stopped item stays");
             Sender.Result next = Sender.run(outbox, "http://127.0.0.1:" + port, new Recorder(), new AtomicBoolean());
             check(next == Sender.Result.sent_all, "next run: " + next);
-            check(Arrays.equals(Files.readAllBytes(new File(data, "2026-10-05/stopped.mp4").toPath()), video), "the stopped file arrives whole");
+            check(Arrays.equals(Files.readAllBytes(new File(data, "stopped.mp4").toPath()), video), "the stopped file arrives whole");
         }
         finally {
             server.destroy();
@@ -374,7 +374,8 @@ public final class SenderTest
 
     private static Process server_start(int port, File data) throws Exception
     {
-        ProcessBuilder builder = new ProcessBuilder("node", new File(repo, "src/http/index.js").getPath(), data.getPath());
+        // Files land in data, the server's own state goes beside it.
+        ProcessBuilder builder = new ProcessBuilder("node", new File(repo, "src/http/index.js").getPath(), data.getPath(), data.getPath() + "-uploads");
         builder.environment().put("PORT", String.valueOf(port));
         builder.redirectErrorStream(true);
         builder.redirectOutput(new File(work, "server-" + port + ".log"));

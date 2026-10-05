@@ -10,37 +10,40 @@ const test = require('node:test');
 
 const port = 20000 + Math.floor(Math.random()*20000);
 const base_url = `http://127.0.0.1:${port}`;
-const day = '2026-10-05';
 
-let data_dir = null;
+let drop_dir = null;
+let uploads_dir = null;
 let server = null;
 
 test.before(async function () {
-    data_dir = fs.mkdtempSync(fs_path_join(os.tmpdir(), 'file-drop-test-'));
-    const uploads_dir = fs_path_join(data_dir, '.uploads');
+    drop_dir = fs.mkdtempSync(fs_path_join(os.tmpdir(), 'file-drop-test-'));
+    // The state on another disk than the drop folder, as with docker's two
+    // mounts: a finished part cannot be renamed into place, it is copied.
+    const state_root = fs.existsSync('/dev/shm') ? '/dev/shm' : os.tmpdir();
+    uploads_dir = fs.mkdtempSync(fs_path_join(state_root, 'file-drop-test-uploads-'));
     const week_ago = new Date(Date.now() - 8*24*3600*1000);
-    fs.mkdirSync(uploads_dir);
     fs.writeFileSync(fs_path_join(uploads_dir, 'old-upload-id.part'), 'abandoned');
     fs.utimesSync(fs_path_join(uploads_dir, 'old-upload-id.part'), week_ago, week_ago);
     fs.writeFileSync(fs_path_join(uploads_dir, 'new-upload-id.part'), 'resumable');
-    server = child_process.spawn(process.execPath, [fs_path_join(__dirname, 'index.js'), data_dir], {env: {...process.env, PORT: String(port)}});
+    server = child_process.spawn(process.execPath, [fs_path_join(__dirname, 'index.js'), drop_dir, uploads_dir], {env: {...process.env, PORT: String(port)}});
     await server_wait_listen();
 });
 
 test.after(function () {
     server.kill();
-    fs.rmSync(data_dir, {force: true, recursive: true});
+    fs.rmSync(drop_dir, {force: true, recursive: true});
+    fs.rmSync(uploads_dir, {force: true, recursive: true});
 });
 
 test('a part older than a week is forgotten, a fresh one waits', function () {
-    assert.deepStrictEqual(fs.readdirSync(fs_path_join(data_dir, '.uploads')), ['new-upload-id.part']);
+    assert.deepStrictEqual(fs.readdirSync(uploads_dir), ['new-upload-id.part']);
 });
 
-test('an upload lands in its day under its own name with the phone time', async function () {
+test('an upload lands in the drop folder under its own name with the phone time', async function () {
     const mtime = Date.parse('2026-10-04T12:34:56Z');
     const answer = await upload_whole(upload_id(), 'IMG_0001.jpg', 'first photo', {'x-file-mtime': String(mtime)});
-    assert.deepStrictEqual(answer, {offset: 11, saved: `${day}/IMG_0001.jpg`});
-    const file_path = fs_path_join(data_dir, day, 'IMG_0001.jpg');
+    assert.deepStrictEqual(answer, {offset: 11, saved: 'IMG_0001.jpg'});
+    const file_path = fs_path_join(drop_dir, 'IMG_0001.jpg');
     assert.strictEqual(fs.readFileSync(file_path, 'utf8'), 'first photo');
     assert.strictEqual(fs.statSync(file_path).mtimeMs, mtime);
 });
@@ -49,47 +52,39 @@ test('a finished upload sent again changes nothing', async function () {
     const id = upload_id();
     await upload_whole(id, 'note.txt', 'hello');
     const again = await upload_whole(id, 'note.txt', 'hello');
-    assert.deepStrictEqual(again, {offset: 5, saved: `${day}/note.txt`});
-    assert.ok(!fs.existsSync(fs_path_join(data_dir, day, 'note_2.txt')));
-    assert.deepStrictEqual(await upload_state(id), {offset: 0, saved: `${day}/note.txt`, busy: false});
+    assert.deepStrictEqual(again, {offset: 5, saved: 'note.txt'});
+    assert.ok(!fs.existsSync(fs_path_join(drop_dir, 'note_1.txt')));
+    assert.deepStrictEqual(await upload_state(id), {offset: 0, saved: 'note.txt', busy: false});
 });
 
 test('the same file under a new id is stored once', async function () {
     const answer = await upload_whole(upload_id(), 'IMG_0001.jpg', 'first photo');
-    assert.strictEqual(answer.saved, `${day}/IMG_0001.jpg`);
-    assert.ok(!fs.existsSync(fs_path_join(data_dir, day, 'IMG_0001_2.jpg')));
+    assert.strictEqual(answer.saved, 'IMG_0001.jpg');
+    assert.ok(!fs.existsSync(fs_path_join(drop_dir, 'IMG_0001_1.jpg')));
 });
 
-test('other bytes under a taken name get a numbered name', async function () {
+test('other bytes under a taken name get _1, then _2', async function () {
     const answer = await upload_whole(upload_id(), 'IMG_0001.jpg', 'second photo');
-    assert.strictEqual(answer.saved, `${day}/IMG_0001_2.jpg`);
+    assert.strictEqual(answer.saved, 'IMG_0001_1.jpg');
+    const third = await upload_whole(upload_id(), 'IMG_0001.jpg', 'third photo');
+    assert.strictEqual(third.saved, 'IMG_0001_2.jpg');
+    assert.strictEqual(fs.readFileSync(fs_path_join(drop_dir, 'IMG_0001.jpg'), 'utf8'), 'first photo');
 });
 
 test('a folder keeps its tree', async function () {
     const answer = await upload_whole(upload_id(), 'Trip/day 1/a.jpg', 'a');
-    assert.strictEqual(answer.saved, `${day}/Trip/day 1/a.jpg`);
-    assert.ok(fs.existsSync(fs_path_join(data_dir, day, 'Trip', 'day 1', 'a.jpg')));
+    assert.strictEqual(answer.saved, 'Trip/day 1/a.jpg');
+    assert.ok(fs.existsSync(fs_path_join(drop_dir, 'Trip', 'day 1', 'a.jpg')));
 });
 
-test('a path cannot leave its day', async function () {
+test('a path cannot leave the drop folder', async function () {
     const answer = await upload_whole(upload_id(), '../../escape.txt', 'no');
-    assert.strictEqual(answer.saved, `${day}/escape.txt`);
+    assert.strictEqual(answer.saved, 'escape.txt');
 });
 
 test('a name outside ascii arrives intact', async function () {
     const answer = await upload_whole(upload_id(), 'отчёт за май.pdf', 'pdf');
-    assert.strictEqual(answer.saved, `${day}/отчёт за май.pdf`);
-});
-
-test('with no day the server takes its own', async function () {
-    const id = upload_id();
-    const res = await fetch(`${base_url}/upload/${id}`, {
-        body: 'x',
-        headers: {'x-file-path': 'no-day.txt', 'x-file-size': '1'},
-        method: 'POST',
-    });
-    const answer = await res.json();
-    assert.match(answer.saved, /^\d{4}-\d\d-\d\d\/no-day\.txt$/);
+    assert.strictEqual(answer.saved, 'отчёт за май.pdf');
 });
 
 test('an upload sent in two parts continues from the offset', async function () {
@@ -99,8 +94,8 @@ test('an upload sent in two parts continues from the offset', async function () 
     assert.deepStrictEqual(first, {offset: 40000, saved: null});
     assert.deepStrictEqual(await upload_state(id), {offset: 40000, saved: null, busy: false});
     const second = await upload_part(id, 'video.mp4', body, 40000, body.length);
-    assert.strictEqual(second.saved, `${day}/video.mp4`);
-    assert.ok(fs.readFileSync(fs_path_join(data_dir, day, 'video.mp4')).equals(body));
+    assert.strictEqual(second.saved, 'video.mp4');
+    assert.ok(fs.readFileSync(fs_path_join(drop_dir, 'video.mp4')).equals(body));
 });
 
 test('a wrong offset is refused with the right one', async function () {
@@ -123,8 +118,8 @@ test('a connection cut mid-file keeps what arrived', async function () {
     const state = await upload_state_settled(id, 120000);
     assert.deepStrictEqual(state, {offset: 120000, saved: null, busy: false});
     const answer = await upload_part(id, 'cut.bin', body, 120000, body.length);
-    assert.strictEqual(answer.saved, `${day}/cut.bin`);
-    assert.ok(fs.readFileSync(fs_path_join(data_dir, day, 'cut.bin')).equals(body));
+    assert.strictEqual(answer.saved, 'cut.bin');
+    assert.ok(fs.readFileSync(fs_path_join(drop_dir, 'cut.bin')).equals(body));
 });
 
 test('an upload in progress shows as busy', async function () {
@@ -138,7 +133,7 @@ test('an upload in progress shows as busy', async function () {
     assert.strictEqual((await upload_state(id)).busy, true);
     req.end(body.subarray(1000));
     await upload_state_settled(id, body.length);
-    assert.strictEqual((await upload_state(id)).saved, `${day}/slow.bin`);
+    assert.strictEqual((await upload_state(id)).saved, 'slow.bin');
 });
 
 test('an upload with no size is refused', async function () {
@@ -165,6 +160,19 @@ test('a discovery question gets the port back', async function () {
     assert.deepStrictEqual(answer, {name: 'file-drop', host: os.hostname(), port});
 });
 
+test('the state really is on another disk', function () {
+    if (fs.statSync(drop_dir).dev === fs.statSync(uploads_dir).dev) {
+        return;
+    }
+    assert.notStrictEqual(fs.statSync(drop_dir).dev, fs.statSync(uploads_dir).dev);
+});
+
+test('no hidden copy is left in the drop folder', async function () {
+    await upload_whole(upload_id(), 'moved.txt', 'across disks');
+    assert.deepStrictEqual(fs.readdirSync(drop_dir).filter(v => v.startsWith('.')), []);
+    assert.strictEqual(fs.readFileSync(fs_path_join(drop_dir, 'moved.txt'), 'utf8'), 'across disks');
+});
+
 function upload_id()
 {
     return crypto.randomBytes(8).toString('hex');
@@ -173,7 +181,6 @@ function upload_id()
 function upload_headers(relative, size, offset)
 {
     return {
-        'x-file-day': day,
         'x-file-path': encodeURIComponent(relative),
         'x-file-size': String(size),
         'x-upload-offset': String(offset),
