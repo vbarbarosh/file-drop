@@ -27,7 +27,7 @@ public class ShareActivity extends Activity
         boolean is_dark = "dark".equals(Settings.theme(this));
         status = new TextView(this);
         status.setTextSize(16f);
-        status.setPadding(dp(24), dp(20), dp(24), dp(20));
+        status.setPadding(px_from_dp(24), px_from_dp(20), px_from_dp(24), px_from_dp(20));
         status.setTextColor(is_dark ? 0xFFE6EBE8 : 0xFF141816);
         getWindow().setBackgroundDrawable(new ColorDrawable(is_dark ? 0xFF1B211E : 0xFFFFFFFF));
         status.setText("adding…");
@@ -41,21 +41,21 @@ public class ShareActivity extends Activity
         }
 
         Intent intent = getIntent();
-        List<Uri> uris = shared_uris(intent);
+        List<Uri> uris = uris_from_intent(intent);
         CharSequence shared_text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
         String text = (shared_text == null) ? null : shared_text.toString();
         if (!uris.isEmpty()) {
-            Importer.add_documents(this, uris, this::import_done);
+            Importer.add_documents(this, uris, this::import_notify);
             ui_handler.post(ticker);
             return;
         }
         if ((text != null) && !text.trim().isEmpty()) {
             String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
             String note = ((subject == null) || subject.isEmpty() || text.contains(subject)) ? text : (subject + "\n\n" + text);
-            Importer.add_text(this, note, this::import_done);
+            Importer.add_text(this, note, this::import_notify);
             return;
         }
-        toast("nothing to send");
+        toast_show("nothing to send");
         finish();
     }
 
@@ -87,19 +87,19 @@ public class ShareActivity extends Activity
         }
     };
 
-    private void import_done(int added, String error)
+    private void import_notify(int added, String failure)
     {
-        if (error != null) {
-            toast(error);
+        if (failure != null) {
+            toast_show(failure);
         }
         else {
-            toast(SendJob.plural(added, "file") + " will go to the laptop");
+            toast_show(SendJob.format_count(added, "file") + " will go to the laptop");
         }
         finish();
     }
 
     @SuppressWarnings("deprecation")
-    private static List<Uri> shared_uris(Intent intent)
+    private static List<Uri> uris_from_intent(Intent intent)
     {
         List<Uri> out = new ArrayList<>();
         if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
@@ -116,12 +116,12 @@ public class ShareActivity extends Activity
         return out;
     }
 
-    private void toast(String message)
+    private void toast_show(String message)
     {
         Toast.makeText(getApplicationContext(), message, Toast.LENGTH_LONG).show();
     }
 
-    private int dp(int value)
+    private int px_from_dp(int value)
     {
         return Math.round(value*getResources().getDisplayMetrics().density);
     }

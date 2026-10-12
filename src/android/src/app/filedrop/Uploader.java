@@ -27,11 +27,11 @@ public class Uploader
         }
     }
 
-    private static final int failures_max = 3;
-    private static final int busy_max = 45;
+    private static final int FAILURES_MAX = 3;
+    private static final int BUSY_MAX = 45;
 
     // The path the file got on the laptop. Throws when the laptop is gone.
-    public static String send(String server, OutboxItem item, Progress progress) throws IOException, InterruptedException
+    public static String send(String server_url, OutboxItem item, Progress progress) throws IOException, InterruptedException
     {
         if (item.data_file().length() != item.size) {
             throw new IllegalStateException("outbox item " + item.id + " is damaged");
@@ -43,7 +43,7 @@ public class Uploader
             try {
                 long[] offset = new long[1];
                 boolean[] holding = new boolean[1];
-                String saved = state_get(server, item, offset, holding);
+                String saved = upload_get(server_url, item, offset, holding);
                 if (saved != null) {
                     return saved;
                 }
@@ -51,7 +51,7 @@ public class Uploader
                 // holds the upload until the server gives up on it.
                 if (holding[0]) {
                     busy += 1;
-                    if (busy > busy_max) {
+                    if (busy > BUSY_MAX) {
                         throw new IOException("upload stays busy");
                     }
                     Thread.sleep(2000);
@@ -62,14 +62,14 @@ public class Uploader
                     failures = 0;
                     last_offset = offset[0];
                 }
-                Answer answer = post_from(server, item, offset[0], progress);
+                Answer answer = upload_post(server_url, item, offset[0], progress);
                 if (answer.saved != null) {
                     return answer.saved;
                 }
                 // 409: the offset moved since we asked; ask again.
                 if (answer.code == 409) {
                     busy += 1;
-                    if (busy > busy_max) {
+                    if (busy > BUSY_MAX) {
                         throw new IOException("upload stays refused");
                     }
                     Thread.sleep(500);
@@ -80,7 +80,7 @@ public class Uploader
             }
             catch (IOException error) {
                 failures += 1;
-                if (failures >= failures_max) {
+                if (failures >= FAILURES_MAX) {
                     throw error;
                 }
                 Thread.sleep(2000*failures);
@@ -101,9 +101,9 @@ public class Uploader
     }
 
     // GET /upload/:id: the saved path, or null with the offset to go on from.
-    private static String state_get(String server, OutboxItem item, long[] offset, boolean[] holding) throws IOException
+    private static String upload_get(String server_url, OutboxItem item, long[] offset, boolean[] holding) throws IOException
     {
-        HttpURLConnection connection = (HttpURLConnection) new URL(server + "/upload/" + item.id).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(server_url + "/upload/" + item.id).openConnection();
         connection.setConnectTimeout(5000);
         connection.setReadTimeout(15000);
         int code = connection.getResponseCode();
@@ -111,7 +111,7 @@ public class Uploader
             connection.disconnect();
             throw new IOException("http " + code);
         }
-        Server.read_body(connection.getInputStream());
+        Server.body_read(connection.getInputStream());
         offset[0] = Long.parseLong(connection.getHeaderField("x-upload-offset"));
         holding[0] = "1".equals(connection.getHeaderField("x-upload-busy"));
         String saved = header_decode(connection.getHeaderField("x-file-saved"));
@@ -122,9 +122,9 @@ public class Uploader
     // POST /upload/:id with the file from offset on. The connection is
     // closed on every way out: one left open would hold the upload on the
     // server for a minute.
-    private static Answer post_from(String server, OutboxItem item, long offset, Progress progress) throws IOException
+    private static Answer upload_post(String server_url, OutboxItem item, long offset, Progress progress) throws IOException
     {
-        HttpURLConnection connection = (HttpURLConnection) new URL(server + "/upload/" + item.id).openConnection();
+        HttpURLConnection connection = (HttpURLConnection) new URL(server_url + "/upload/" + item.id).openConnection();
         try {
             connection.setConnectTimeout(5000);
             // The last byte makes the server hash the file before it answers.
@@ -143,16 +143,16 @@ public class Uploader
             try {
                 // skip() may stop short; a position is exact.
                 in.getChannel().position(offset);
-                OutputStream out = connection.getOutputStream();
+                OutputStream body_stream = connection.getOutputStream();
                 byte[] chunk = new byte[65536];
                 long sent = offset;
                 int read;
                 while ((read = in.read(chunk)) > 0) {
-                    out.write(chunk, 0, read);
+                    body_stream.write(chunk, 0, read);
                     sent += read;
                     progress.on_progress(item, sent, item.size);
                 }
-                out.close();
+                body_stream.close();
             }
             finally {
                 in.close();

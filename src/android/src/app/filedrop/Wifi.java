@@ -26,7 +26,7 @@ public class Wifi
     }
 
     // Any wifi, with or without internet.
-    public static NetworkRequest request()
+    public static NetworkRequest request_build()
     {
         return new NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)

@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 // address no longer answers.
 public class Server
 {
-    public static final int default_port = 8080;
+    public static final int DEFAULT_PORT = 8080;
 
     public final String url;
     public final String host;
@@ -34,7 +34,7 @@ public class Server
     public static Server find(String saved_url, String... extra_targets)
     {
         if (saved_url != null) {
-            Server saved = info(saved_url);
+            Server saved = info_get(saved_url);
             if (saved != null) {
                 return saved;
             }
@@ -50,7 +50,7 @@ public class Server
         try {
             Scan.progress = "asking the wifi…";
             String asked_url = Discovery.ask(port, 1500, extra_targets);
-            Server asked = (asked_url == null) ? null : info(asked_url);
+            Server asked = (asked_url == null) ? null : info_get(asked_url);
             if (asked != null) {
                 out.add(asked);
                 return out;
@@ -64,25 +64,25 @@ public class Server
     }
 
     // GET /info; null when nothing, or something that is not file-drop, answers.
-    public static Server info(String url)
+    public static Server info_get(String url)
     {
-        return info(url, 3000);
+        return info_get(url, 3000);
     }
 
-    public static Server info(String url, int connect_ms)
+    public static Server info_get(String url, int connect_ms)
     {
         try {
             HttpURLConnection connection = (HttpURLConnection) new URL(url + "/info").openConnection();
             connection.setConnectTimeout(connect_ms);
             connection.setReadTimeout(5000);
             int code = connection.getResponseCode();
-            String body = read_body(connection.getInputStream());
+            String body = body_read(connection.getInputStream());
             connection.disconnect();
             if ((code != 200) || !body.contains("\"name\":\"file-drop\"")) {
                 return null;
             }
-            String host = json_string(body, "host");
-            String apk_version = json_number(body, "apk_version");
+            String host = json_string_read(body, "host");
+            String apk_version = json_number_read(body, "apk_version");
             return new Server(url, (host == null) ? url : host, (apk_version == null) ? 0 : Integer.parseInt(apk_version));
         }
         catch (Exception error) {
@@ -91,7 +91,7 @@ public class Server
     }
 
     // POST /client-log: the event shows in the laptop's console. Best effort.
-    public static void report(String url, String version, String event, String detail)
+    public static void client_log_post(String url, String version, String event_name, String detail)
     {
         try {
             HttpURLConnection connection = (HttpURLConnection) new URL(url + "/client-log").openConnection();
@@ -100,15 +100,15 @@ public class Server
             connection.setDoOutput(true);
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/json");
-            String json = "{\"version\":\"" + json_escape(version) + "\",\"event\":\"" + json_escape(event)
+            String json = "{\"version\":\"" + json_escape(version) + "\",\"event\":\"" + json_escape(event_name)
                 + "\",\"detail\":\"" + json_escape(detail) + "\"}";
-            OutputStream out = connection.getOutputStream();
-            out.write(json.getBytes("UTF-8"));
-            out.close();
+            OutputStream body_stream = connection.getOutputStream();
+            body_stream.write(json.getBytes("UTF-8"));
+            body_stream.close();
             connection.getResponseCode();
             connection.disconnect();
         }
-        catch (Exception ignored) {
+        catch (Exception error) {
             // the console misses one line; nothing else depends on it
         }
     }
@@ -116,18 +116,18 @@ public class Server
     public static int port_of(String url)
     {
         if (url == null) {
-            return default_port;
+            return DEFAULT_PORT;
         }
         try {
             int port = new URL(url).getPort();
-            return (port > 0) ? port : default_port;
+            return (port > 0) ? port : DEFAULT_PORT;
         }
         catch (Exception error) {
-            return default_port;
+            return DEFAULT_PORT;
         }
     }
 
-    static String read_body(InputStream in) throws IOException
+    static String body_read(InputStream in) throws IOException
     {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         byte[] chunk = new byte[8192];
@@ -139,13 +139,13 @@ public class Server
         return body.toString("UTF-8");
     }
 
-    static String json_string(String json, String key)
+    static String json_string_read(String json, String key)
     {
         Matcher match = Pattern.compile("\"" + key + "\":\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(json);
         return match.find() ? match.group(1).replace("\\\"", "\"").replace("\\\\", "\\") : null;
     }
 
-    static String json_number(String json, String key)
+    static String json_number_read(String json, String key)
     {
         Matcher match = Pattern.compile("\"" + key + "\":(\\d+)").matcher(json);
         return match.find() ? match.group(1) : null;

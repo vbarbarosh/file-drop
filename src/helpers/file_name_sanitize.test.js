@@ -26,7 +26,7 @@ test('control and reserved characters become underscores', function () {
 });
 
 test('a long name is cut in its stem and keeps the extension', function () {
-    const out = file_name_sanitize(`${'я'.repeat(300)}.jpeg`);
-    assert.ok(Buffer.byteLength(out) <= 200);
-    assert.ok(out.endsWith('я.jpeg'));
+    const name = file_name_sanitize(`${'я'.repeat(300)}.jpeg`);
+    assert.ok(Buffer.byteLength(name) <= 200);
+    assert.ok(name.endsWith('я.jpeg'));
 });

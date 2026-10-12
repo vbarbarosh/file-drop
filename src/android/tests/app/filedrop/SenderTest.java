@@ -45,7 +45,7 @@ public final class SenderTest
             test_outbox_add_failure_leaves_nothing();
         }
         finally {
-            Outbox.delete_tree(work);
+            Outbox.tree_delete(work);
         }
         System.out.println("Passed " + checks + " sender checks");
     }
@@ -54,12 +54,12 @@ public final class SenderTest
     private static void test_outbox_waits_for_the_server() throws Exception
     {
         Outbox outbox = new Outbox(new File(work, "outbox-1"));
-        byte[] photo = random_bytes(2_000_000);
+        byte[] photo = random_bytes_create(2_000_000);
         outbox.add(new ByteArrayInputStream("buy milk".getBytes(StandardCharsets.UTF_8)), "note_2026-10-05_00-30-00.txt", 1_700_000_000_000L, "2026-10-05");
         outbox.add(new ByteArrayInputStream(photo), "photo 1.jpg", 1_700_000_000_000L, "2026-10-05");
         outbox.add(new ByteArrayInputStream(photo), "Trip/день 1/photo 1.jpg", 1_700_000_000_000L, "2026-10-05");
 
-        int port = free_port();
+        int port = free_port_find();
         Recorder recorder = new Recorder();
         Sender.Result offline = Sender.run(outbox, "http://127.0.0.1:" + port, recorder, new AtomicBoolean(), "127.0.0.1");
         check(offline == Sender.Result.no_server, "no server: " + offline);
@@ -86,14 +86,14 @@ public final class SenderTest
     // The saved address is dead; the laptop is found by asking the network.
     private static void test_discovery_finds_the_server() throws Exception
     {
-        int port = free_port();
+        int port = free_port_find();
         Process server = server_start(port, new File(work, "data-2"));
         try {
             Server found = Server.find("http://127.0.0.1:" + port + "0", "127.0.0.1");
             check(found == null, "a wrong port is not found by asking another one");
             String asked = Discovery.ask(port, 1500, "127.0.0.1");
             check(("http://127.0.0.1:" + port).equals(asked), "discovery answer: " + asked);
-            Server info = Server.info(asked);
+            Server info = Server.info_get(asked);
             check((info != null) && (info.apk_version == 0) && !info.host.isEmpty(), "info answers");
         }
         finally {
@@ -104,7 +104,7 @@ public final class SenderTest
     // A wifi that drops broadcasts: the addresses next to ours are asked one by one.
     private static void test_scan_finds_the_server() throws Exception
     {
-        int port = free_port();
+        int port = free_port_find();
         Process server = server_start(port, new File(work, "data-7"));
         try {
             // The screen shows the scan as it goes.
@@ -140,8 +140,8 @@ public final class SenderTest
             List<Server> lan = Scan.run(port, 700, prefixes);
             String own = Scan.local_addresses().get(0).getHostAddress();
             boolean found_own = false;
-            for (Server each : lan) {
-                found_own = found_own || each.url.equals("http://" + own + ":" + port);
+            for (Server lan_server : lan) {
+                found_own = found_own || lan_server.url.equals("http://" + own + ":" + port);
             }
             check(found_own, "scan of " + prefixes + " finds " + own + ": " + lan.size() + " found");
         }
@@ -153,13 +153,13 @@ public final class SenderTest
     // Every connection is cut after 700 kB; the upload still arrives whole.
     private static void test_cut_connections_resume() throws Exception
     {
-        int port = free_port();
+        int port = free_port_find();
         File data = new File(work, "data-3");
         Process server = server_start(port, data);
         CuttingProxy proxy = new CuttingProxy(port, 700_000, 100);
         try {
             Outbox outbox = new Outbox(new File(work, "outbox-3"));
-            byte[] video = random_bytes(5_000_000);
+            byte[] video = random_bytes_create(5_000_000);
             outbox.add(new ByteArrayInputStream(video), "video.mp4", 1_700_000_000_000L, "2026-10-05");
             Sender.Result result = Sender.run(outbox, "http://127.0.0.1:" + proxy.port, new Recorder(), new AtomicBoolean());
             check(result == Sender.Result.sent_all, "cut connections: " + result);
@@ -175,13 +175,13 @@ public final class SenderTest
     // The laptop vanishes mid-file: the item stays, and later goes from where it stopped.
     private static void test_lost_server_keeps_the_item() throws Exception
     {
-        int port = free_port();
+        int port = free_port_find();
         File data = new File(work, "data-4");
         Process server = server_start(port, data);
         CuttingProxy proxy = new CuttingProxy(port, 1_000_000, 1);
         proxy.dead_after_cuts = true;
         Outbox outbox = new Outbox(new File(work, "outbox-4"));
-        byte[] video = random_bytes(3_000_000);
+        byte[] video = random_bytes_create(3_000_000);
         outbox.add(new ByteArrayInputStream(video), "lost.mp4", 1_700_000_000_000L, "2026-10-05");
         try {
             Recorder recorder = new Recorder();
@@ -204,24 +204,24 @@ public final class SenderTest
     // Android stops the job: the upload ends mid-file and the next run goes on.
     private static void test_stop_ends_the_upload_mid_file() throws Exception
     {
-        int port = free_port();
+        int port = free_port_find();
         File data = new File(work, "data-6");
         Process server = server_start(port, data);
         try {
             Outbox outbox = new Outbox(new File(work, "outbox-6"));
-            byte[] video = random_bytes(8_000_000);
+            byte[] video = random_bytes_create(8_000_000);
             outbox.add(new ByteArrayInputStream(video), "stopped.mp4", 1_700_000_000_000L, "2026-10-05");
-            AtomicBoolean stop = new AtomicBoolean();
+            AtomicBoolean stop_requested = new AtomicBoolean();
             Recorder stopper = new Recorder() {
                 @Override
                 public void on_progress(OutboxItem item, long sent_bytes, long size)
                 {
                     if (sent_bytes > 2_000_000) {
-                        stop.set(true);
+                        stop_requested.set(true);
                     }
                 }
             };
-            Sender.Result stopped = Sender.run(outbox, "http://127.0.0.1:" + port, stopper, stop);
+            Sender.Result stopped = Sender.run(outbox, "http://127.0.0.1:" + port, stopper, stop_requested);
             check(stopped == Sender.Result.stopped, "stopped: " + stopped);
             check(outbox.list().size() == 1, "a stopped item stays");
             Sender.Result next = Sender.run(outbox, "http://127.0.0.1:" + port, new Recorder(), new AtomicBoolean());
@@ -252,7 +252,7 @@ public final class SenderTest
             outbox.add(broken, "half.bin", 0, "2026-10-05");
             check(false, "a broken copy must throw");
         }
-        catch (java.io.IOException expected) {
+        catch (java.io.IOException error) {
             check(outbox.list().isEmpty(), "a broken copy leaves no item");
             check(new File(work, "outbox-5").list().length == 0, "and no tmp folder");
         }
@@ -306,7 +306,7 @@ public final class SenderTest
         {
             listener = new ServerSocket(0);
             port = listener.getLocalPort();
-            Thread accept = new Thread(() -> {
+            Thread accept_thread = new Thread(() -> {
                 while (!listener.isClosed()) {
                     try {
                         Socket client = listener.accept();
@@ -316,29 +316,29 @@ public final class SenderTest
                         }
                         Socket upstream = new Socket("127.0.0.1", target_port);
                         boolean cutting = cuts.get() < cuts_max;
-                        pump(client, upstream, cutting ? cut_after : Long.MAX_VALUE);
-                        pump(upstream, client, Long.MAX_VALUE);
+                        pump_start(client, upstream, cutting ? cut_after : Long.MAX_VALUE);
+                        pump_start(upstream, client, Long.MAX_VALUE);
                     }
                     catch (Exception error) {
                         // closed
                     }
                 }
             });
-            accept.setDaemon(true);
-            accept.start();
+            accept_thread.setDaemon(true);
+            accept_thread.start();
         }
 
-        private void pump(Socket from, Socket to, long limit)
+        private void pump_start(Socket from, Socket to, long limit)
         {
             Thread thread = new Thread(() -> {
                 long carried = 0;
                 try {
                     InputStream in = from.getInputStream();
-                    OutputStream out = to.getOutputStream();
+                    OutputStream to_stream = to.getOutputStream();
                     byte[] chunk = new byte[16384];
                     int read;
                     while ((read = in.read(chunk)) > 0) {
-                        out.write(chunk, 0, read);
+                        to_stream.write(chunk, 0, read);
                         carried += read;
                         if (carried > limit) {
                             cuts.incrementAndGet();
@@ -349,8 +349,8 @@ public final class SenderTest
                 catch (Exception error) {
                     // either side closed
                 }
-                close_quietly(from);
-                close_quietly(to);
+                socket_close_quietly(from);
+                socket_close_quietly(to);
             });
             thread.setDaemon(true);
             thread.start();
@@ -362,7 +362,7 @@ public final class SenderTest
         }
     }
 
-    private static void close_quietly(Socket socket)
+    private static void socket_close_quietly(Socket socket)
     {
         try {
             socket.close();
@@ -379,19 +379,19 @@ public final class SenderTest
         builder.environment().put("PORT", String.valueOf(port));
         builder.redirectErrorStream(true);
         builder.redirectOutput(new File(work, "server-" + port + ".log"));
-        Process out = builder.start();
+        Process server = builder.start();
         long deadline = System.currentTimeMillis() + 10000;
         while (System.currentTimeMillis() < deadline) {
-            if (Server.info("http://127.0.0.1:" + port) != null) {
-                return out;
+            if (Server.info_get("http://127.0.0.1:" + port) != null) {
+                return server;
             }
             Thread.sleep(100);
         }
-        out.destroy();
+        server.destroy();
         throw new AssertionError("server did not start on " + port);
     }
 
-    private static int free_port() throws Exception
+    private static int free_port_find() throws Exception
     {
         ServerSocket socket = new ServerSocket(0);
         int port = socket.getLocalPort();
@@ -399,7 +399,7 @@ public final class SenderTest
         return port;
     }
 
-    private static byte[] random_bytes(int size)
+    private static byte[] random_bytes_create(int size)
     {
         byte[] out = new byte[size];
         new Random(size).nextBytes(out);

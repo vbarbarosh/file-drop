@@ -15,16 +15,16 @@ import java.io.FileNotFoundException;
 //   content://app.filedrop.files/update.apk      the system installer reads the update
 public class FilesProvider extends ContentProvider
 {
-    public static final String authority = "app.filedrop.files";
+    public static final String AUTHORITY = "app.filedrop.files";
 
     public static Uri staging_uri(String name)
     {
-        return Uri.parse("content://" + authority + "/staging/" + Uri.encode(name));
+        return Uri.parse("content://" + AUTHORITY + "/staging/" + Uri.encode(name));
     }
 
     public static Uri update_uri()
     {
-        return Uri.parse("content://" + authority + "/update.apk");
+        return Uri.parse("content://" + AUTHORITY + "/update.apk");
     }
 
     @Override
@@ -36,7 +36,7 @@ public class FilesProvider extends ContentProvider
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException
     {
-        File file = file_of(uri);
+        File file = file_from_uri(uri);
         if (file.getName().equals("update.apk")) {
             return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
         }
@@ -65,7 +65,7 @@ public class FilesProvider extends ContentProvider
     {
         File file;
         try {
-            file = file_of(uri);
+            file = file_from_uri(uri);
         }
         catch (FileNotFoundException error) {
             return null;
@@ -93,7 +93,7 @@ public class FilesProvider extends ContentProvider
         return 0;
     }
 
-    private File file_of(Uri uri) throws FileNotFoundException
+    private File file_from_uri(Uri uri) throws FileNotFoundException
     {
         String path = uri.getPath();
         if ("/update.apk".equals(path)) {

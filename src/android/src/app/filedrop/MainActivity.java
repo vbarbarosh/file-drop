@@ -41,23 +41,23 @@ import java.util.Locale;
 // screen shows the laptop, what waits and what is being sent.
 public class MainActivity extends Activity
 {
-    private static final int request_photo = 1;
-    private static final int request_files = 2;
-    private static final int request_folder = 3;
-    private static final int request_audio_permission = 4;
-    private static final int request_notification_permission = 5;
+    private static final int REQUEST_PHOTO = 1;
+    private static final int REQUEST_FILES = 2;
+    private static final int REQUEST_FOLDER = 3;
+    private static final int REQUEST_AUDIO_PERMISSION = 4;
+    private static final int REQUEST_NOTIFICATION_PERMISSION = 5;
 
-    private static final int[] light = {0xFFF3F5F4, 0xFFFFFFFF, 0xFF141816, 0xFF5B6662, 0xFFD5DCD9, 0xFF1F8A70, 0xFFFFFFFF};
-    private static final int[] dark = {0xFF121614, 0xFF1B211E, 0xFFE6EBE8, 0xFF96A39D, 0xFF2C3531, 0xFF34B892, 0xFF0B1210};
-    private static final int color_bg = 0;
-    private static final int color_surface = 1;
-    private static final int color_fg = 2;
-    private static final int color_muted = 3;
-    private static final int color_border = 4;
-    private static final int color_accent = 5;
-    private static final int color_accent_fg = 6;
+    private static final int[] LIGHT = {0xFFF3F5F4, 0xFFFFFFFF, 0xFF141816, 0xFF5B6662, 0xFFD5DCD9, 0xFF1F8A70, 0xFFFFFFFF};
+    private static final int[] DARK = {0xFF121614, 0xFF1B211E, 0xFFE6EBE8, 0xFF96A39D, 0xFF2C3531, 0xFF34B892, 0xFF0B1210};
+    private static final int COLOR_BG = 0;
+    private static final int COLOR_SURFACE = 1;
+    private static final int COLOR_FG = 2;
+    private static final int COLOR_MUTED = 3;
+    private static final int COLOR_BORDER = 4;
+    private static final int COLOR_ACCENT = 5;
+    private static final int COLOR_ACCENT_FG = 6;
 
-    private int[] palette = light;
+    private int[] palette = LIGHT;
     private Handler ui_handler;
     private Outbox outbox;
 
@@ -80,11 +80,11 @@ public class MainActivity extends Activity
 
     private Server server = null;
     private String laptop_state = "looking for the laptop…";
-    private int update_offered = 0;
+    private int update_offered_version = 0;
     private MediaRecorder recorder = null;
     private File voice_file = null;
     private String voice_name = null;
-    private long voice_started_ms = 0;
+    private long voice_time0 = 0;
 
     @Override
     protected void onCreate(Bundle saved_state)
@@ -98,7 +98,7 @@ public class MainActivity extends Activity
         scroll.setFillViewport(true);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(12), dp(16), dp(24));
+        root.setPadding(px_from_dp(16), px_from_dp(12), px_from_dp(16), px_from_dp(24));
         scroll.addView(root);
 
         LinearLayout header = new LinearLayout(this);
@@ -108,74 +108,74 @@ public class MainActivity extends Activity
         title.setTextSize(20f);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        theme_button = header_button("");
+        theme_button = header_button_create("");
         header.addView(theme_button);
-        server_button = header_button("laptop");
+        server_button = header_button_create("laptop");
         header.addView(server_button);
         root.addView(header);
 
-        status_card = card();
+        status_card = card_create();
         laptop_text = new TextView(this);
         laptop_text.setTextSize(15f);
         queue_text = new TextView(this);
         queue_text.setTextSize(14f);
-        queue_text.setPadding(0, dp(4), 0, 0);
+        queue_text.setPadding(0, px_from_dp(4), 0, 0);
         status_card.addView(laptop_text);
         status_card.addView(queue_text);
-        root.addView(status_card, spaced(12));
+        root.addView(status_card, spaced_params_create(12));
 
-        update_card = card();
+        update_card = card_create();
         update_text = new TextView(this);
         update_button = new Button(this);
         update_button.setText("Download");
         update_card.addView(update_text);
-        update_card.addView(update_button, spaced(8));
+        update_card.addView(update_button, spaced_params_create(8));
         update_card.setVisibility(View.GONE);
-        root.addView(update_card, spaced(12));
+        root.addView(update_card, spaced_params_create(12));
 
         photo_button = new Button(this);
         photo_button.setText("Take photos");
-        root.addView(photo_button, spaced(20));
+        root.addView(photo_button, spaced_params_create(20));
         voice_button = new Button(this);
         voice_button.setText("Record voice");
-        root.addView(voice_button, spaced(10));
+        root.addView(voice_button, spaced_params_create(10));
         files_button = new Button(this);
         files_button.setText("Choose files");
-        root.addView(files_button, spaced(10));
+        root.addView(files_button, spaced_params_create(10));
         folder_button = new Button(this);
         folder_button.setText("Choose folder");
-        root.addView(folder_button, spaced(10));
+        root.addView(folder_button, spaced_params_create(10));
 
         text_input = new EditText(this);
         text_input.setHint("Text to send");
         text_input.setMinLines(3);
         text_input.setGravity(Gravity.TOP | Gravity.START);
         text_input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        text_input.setPadding(dp(12), dp(10), dp(12), dp(10));
-        root.addView(text_input, spaced(20));
+        text_input.setPadding(px_from_dp(12), px_from_dp(10), px_from_dp(12), px_from_dp(10));
+        root.addView(text_input, spaced_params_create(20));
         text_button = new Button(this);
         text_button.setText("Send text");
-        LinearLayout.LayoutParams text_button_params = spaced(8);
+        LinearLayout.LayoutParams text_button_params = spaced_params_create(8);
         text_button_params.width = LinearLayout.LayoutParams.WRAP_CONTENT;
         text_button_params.gravity = Gravity.END;
         root.addView(text_button, text_button_params);
 
         setContentView(scroll);
 
-        theme_button.setOnClickListener(view -> click_theme());
-        server_button.setOnClickListener(view -> click_server());
-        update_button.setOnClickListener(view -> click_update());
-        photo_button.setOnClickListener(view -> photo_take());
-        voice_button.setOnClickListener(view -> click_voice());
-        files_button.setOnClickListener(view -> click_files());
-        folder_button.setOnClickListener(view -> click_folder());
-        text_button.setOnClickListener(view -> click_text());
+        theme_button.setOnClickListener(v -> click_theme());
+        server_button.setOnClickListener(v -> click_server());
+        update_button.setOnClickListener(v -> click_update());
+        photo_button.setOnClickListener(v -> photo_take());
+        voice_button.setOnClickListener(v -> click_voice());
+        files_button.setOnClickListener(v -> click_files());
+        folder_button.setOnClickListener(v -> click_folder());
+        text_button.setOnClickListener(v -> click_text());
 
         theme_apply();
         staging_rescue(saved_state != null);
         outbox.remove_stale_tmp();
         notification_permission_ask();
-        report("app-started", Build.MODEL + " android " + Build.VERSION.RELEASE);
+        client_log_post("app-started", Build.MODEL + " android " + Build.VERSION.RELEASE);
     }
 
     @Override
@@ -183,7 +183,7 @@ public class MainActivity extends Activity
     {
         super.onResume();
         ui_handler.post(ticker);
-        server_check();
+        refresh_server();
         if (outbox.count() > 0) {
             SendJob.kick(this);
         }
@@ -220,25 +220,25 @@ public class MainActivity extends Activity
     public void onRequestPermissionsResult(int code, String[] permissions, int[] results)
     {
         boolean granted = (results.length > 0) && (results[0] == PackageManager.PERMISSION_GRANTED);
-        if ((code == request_audio_permission) && granted) {
+        if ((code == REQUEST_AUDIO_PERMISSION) && granted) {
             voice_start();
         }
-        else if (code == request_audio_permission) {
-            toast("recording needs the microphone permission");
+        else if (code == REQUEST_AUDIO_PERMISSION) {
+            toast_show("recording needs the microphone permission");
         }
     }
 
     @Override
     protected void onActivityResult(int code, int result, Intent data)
     {
-        if (code == request_photo) {
-            photo_taken(result == RESULT_OK);
+        if (code == REQUEST_PHOTO) {
+            photo_receive(result == RESULT_OK);
             return;
         }
         if ((result != RESULT_OK) || (data == null)) {
             return;
         }
-        if (code == request_files) {
+        if (code == REQUEST_FILES) {
             List<Uri> uris = new ArrayList<>();
             ClipData clip = data.getClipData();
             if (clip != null) {
@@ -249,11 +249,11 @@ public class MainActivity extends Activity
             else if (data.getData() != null) {
                 uris.add(data.getData());
             }
-            Importer.add_documents(this, uris, this::import_done);
+            Importer.add_documents(this, uris, this::import_notify);
             return;
         }
-        if ((code == request_folder) && (data.getData() != null)) {
-            Importer.add_tree(this, data.getData(), this::import_done);
+        if ((code == REQUEST_FOLDER) && (data.getData() != null)) {
+            Importer.add_tree(this, data.getData(), this::import_notify);
         }
     }
 
@@ -274,7 +274,7 @@ public class MainActivity extends Activity
         String importing = Importer.status;
         String sending = SendJob.status;
         // The job tried after this screen asked: its answer is the newer one.
-        boolean job_lost = sending.equals(SendJob.no_laptop);
+        boolean job_lost = sending.equals(SendJob.NO_LAPTOP);
         String searching = Scan.progress;
         if (searching != null) {
             laptop_text.setText("Looking for the laptop: " + searching);
@@ -283,7 +283,7 @@ public class MainActivity extends Activity
             laptop_text.setText("Laptop: " + server.host);
         }
         else {
-            laptop_text.setText(job_lost ? (SendJob.no_laptop + " — files wait on the phone") : laptop_state);
+            laptop_text.setText(job_lost ? (SendJob.NO_LAPTOP + " — files wait on the phone") : laptop_state);
         }
         if (job_lost) {
             sending = "";
@@ -293,34 +293,33 @@ public class MainActivity extends Activity
             queue = importing;
         }
         else if (SendJob.running && !sending.isEmpty()) {
-            queue = sending + " · " + SendJob.plural(waiting, "file") + " left";
+            queue = sending + " · " + SendJob.format_count(waiting, "file") + " left";
         }
         else if (waiting > 0) {
-            queue = SendJob.plural(waiting, "file") + " waiting" + (sending.isEmpty() ? "" : " · " + sending);
+            queue = SendJob.format_count(waiting, "file") + " waiting" + (sending.isEmpty() ? "" : " · " + sending);
         }
         else {
             queue = "everything is sent";
         }
         queue_text.setText(queue);
         if (recorder != null) {
-            long seconds = (SystemClock.elapsedRealtime() - voice_started_ms)/1000;
-            voice_button.setText(String.format(Locale.US, "Stop recording · %d:%02d", seconds/60, seconds%60));
+            voice_button.setText("Stop recording · " + format_duration(SystemClock.elapsedRealtime() - voice_time0));
         }
     }
 
     // the laptop: the saved address, else whoever answers on the wifi
 
-    private void server_check()
+    private void refresh_server()
     {
         String saved = Settings.server(this);
         new Thread(() -> {
             Wifi.bind(this);
             Server found = Server.find(saved);
-            runOnUiThread(() -> server_found(found));
+            runOnUiThread(() -> server_apply(found));
         }).start();
     }
 
-    private void server_found(Server found)
+    private void server_apply(Server found)
     {
         if (isFinishing() || isDestroyed()) {
             return;
@@ -336,9 +335,9 @@ public class MainActivity extends Activity
         if (found.apk_version > Settings.version_code(this)) {
             update_text.setText("Version " + found.apk_version + " is on the laptop (installed: " + Settings.version_code(this) + ").");
             update_card.setVisibility(View.VISIBLE);
-            if (update_offered < found.apk_version) {
-                update_offered = found.apk_version;
-                new AlertDialog.Builder(this, dialog_theme())
+            if (update_offered_version < found.apk_version) {
+                update_offered_version = found.apk_version;
+                new AlertDialog.Builder(this, dialog_theme_pick())
                     .setTitle("Update available")
                     .setMessage("Version " + found.apk_version + " is on the laptop. Download it now?")
                     .setPositiveButton("Download", (dialog, which) -> click_update())
@@ -361,10 +360,10 @@ public class MainActivity extends Activity
         for (InetAddress address : Scan.local_addresses()) {
             phone_addresses.add(address.getHostAddress());
         }
-        String phone = phone_addresses.isEmpty() ? "" : ("\n\nThis phone: " + String.join(", ", phone_addresses));
-        new AlertDialog.Builder(this, dialog_theme())
+        String phone_line = phone_addresses.isEmpty() ? "" : ("\n\nThis phone: " + String.join(", ", phone_addresses));
+        new AlertDialog.Builder(this, dialog_theme_pick())
             .setTitle("Laptop address")
-            .setMessage("Find looks for File Drop on this wifi. Or type the address bin/run prints." + phone)
+            .setMessage("Find looks for File Drop on this wifi. Or type the address bin/run prints." + phone_line)
             .setView(input)
             .setPositiveButton("Save", (dialog, which) -> server_address_save(input.getText().toString()))
             .setNeutralButton("Find", (dialog, which) -> click_find())
@@ -382,11 +381,11 @@ public class MainActivity extends Activity
         new Thread(() -> {
             Wifi.bind(this);
             List<Server> found = Server.find_all(port);
-            runOnUiThread(() -> servers_found(found));
+            runOnUiThread(() -> servers_offer(found));
         }).start();
     }
 
-    private void servers_found(List<Server> found)
+    private void servers_offer(List<Server> found)
     {
         if (isFinishing() || isDestroyed()) {
             return;
@@ -404,7 +403,7 @@ public class MainActivity extends Activity
         for (int i = 0; i < labels.length; ++i) {
             labels[i] = found.get(i).host + " · " + found.get(i).url.replace("http://", "");
         }
-        new AlertDialog.Builder(this, dialog_theme())
+        new AlertDialog.Builder(this, dialog_theme_pick())
             .setTitle("Which laptop?")
             .setItems(labels, (dialog, which) -> server_address_save(found.get(which).url))
             .setNegativeButton("Cancel", null)
@@ -422,13 +421,13 @@ public class MainActivity extends Activity
             url = "http://" + url;
         }
         if (!url.isEmpty() && !url.substring(url.indexOf("//") + 2).contains(":")) {
-            url = url + ":" + Server.default_port;
+            url = url + ":" + Server.DEFAULT_PORT;
         }
         Settings.server_save(this, url.isEmpty() ? null : url);
         server = null;
         laptop_state = "looking for the laptop…";
         refresh();
-        server_check();
+        refresh_server();
         SendJob.kick(this);
     }
 
@@ -455,17 +454,17 @@ public class MainActivity extends Activity
                     }
                     expected = connection.getContentLengthLong();
                     InputStream in = connection.getInputStream();
-                    FileOutputStream out = new FileOutputStream(new File(getCacheDir(), "update.apk"));
+                    FileOutputStream apk_stream = new FileOutputStream(new File(getCacheDir(), "update.apk"));
                     try {
                         byte[] chunk = new byte[65536];
                         int read;
                         while ((read = in.read(chunk)) > 0) {
-                            out.write(chunk, 0, read);
+                            apk_stream.write(chunk, 0, read);
                             written += read;
                         }
                     }
                     finally {
-                        out.close();
+                        apk_stream.close();
                         in.close();
                     }
                 }
@@ -479,7 +478,7 @@ public class MainActivity extends Activity
                 runOnUiThread(this::update_install);
             }
             catch (Exception error) {
-                report("update-failed", error.toString());
+                client_log_post("update-failed", error.toString());
                 runOnUiThread(() -> {
                     update_button.setEnabled(true);
                     update_text.setText("Download failed: " + error.getMessage());
@@ -510,15 +509,15 @@ public class MainActivity extends Activity
         intent.setClipData(ClipData.newRawUri(name, uri));
         intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
-            startActivityForResult(intent, request_photo);
+            startActivityForResult(intent, REQUEST_PHOTO);
         }
         catch (ActivityNotFoundException error) {
             Settings.prefs(this).edit().remove("camera_pending").apply();
-            toast("no camera app on this phone");
+            toast_show("no camera app on this phone");
         }
     }
 
-    private void photo_taken(boolean ok)
+    private void photo_receive(boolean ok)
     {
         String name = Settings.prefs(this).getString("camera_pending", null);
         Settings.prefs(this).edit().remove("camera_pending").apply();
@@ -530,7 +529,7 @@ public class MainActivity extends Activity
             file.delete();
             return;
         }
-        Importer.add_staged(this, file, name, this::import_done);
+        Importer.add_staged(this, file, name, this::import_notify);
         photo_take();
     }
 
@@ -543,7 +542,7 @@ public class MainActivity extends Activity
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, request_audio_permission);
+            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO_PERMISSION);
             return;
         }
         voice_start();
@@ -568,14 +567,14 @@ public class MainActivity extends Activity
             recorder.release();
             recorder = null;
             voice_file.delete();
-            report("voice-failed", error.toString());
-            toast("cannot record: " + error.getMessage());
+            client_log_post("voice-failed", error.toString());
+            toast_show("cannot record: " + error.getMessage());
             return;
         }
-        voice_started_ms = SystemClock.elapsedRealtime();
+        voice_time0 = SystemClock.elapsedRealtime();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        voice_button.setBackground(button_background(true));
-        voice_button.setTextColor(palette[color_accent_fg]);
+        voice_button.setBackground(button_background_create(true));
+        voice_button.setTextColor(palette[COLOR_ACCENT_FG]);
         refresh();
     }
 
@@ -593,10 +592,10 @@ public class MainActivity extends Activity
         recorder = null;
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         voice_button.setText("Record voice");
-        voice_button.setBackground(button_background(false));
-        voice_button.setTextColor(palette[color_fg]);
+        voice_button.setBackground(button_background_create(false));
+        voice_button.setTextColor(palette[COLOR_FG]);
         if (recorded && (voice_file.length() > 0)) {
-            Importer.add_staged(this, voice_file, voice_name, this::import_done);
+            Importer.add_staged(this, voice_file, voice_name, this::import_notify);
         }
         else {
             voice_file.delete();
@@ -611,12 +610,12 @@ public class MainActivity extends Activity
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        startActivityForResult(intent, request_files);
+        startActivityForResult(intent, REQUEST_FILES);
     }
 
     private void click_folder()
     {
-        startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), request_folder);
+        startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQUEST_FOLDER);
     }
 
     private void click_text()
@@ -626,14 +625,14 @@ public class MainActivity extends Activity
             return;
         }
         text_input.setText("");
-        Importer.add_text(this, text, this::import_done);
+        Importer.add_text(this, text, this::import_notify);
     }
 
-    private void import_done(int added, String error)
+    private void import_notify(int added, String failure)
     {
-        if (error != null) {
-            report("import-failed", error);
-            toast(error);
+        if (failure != null) {
+            client_log_post("import-failed", failure);
+            toast_show(failure);
         }
         refresh();
     }
@@ -672,7 +671,7 @@ public class MainActivity extends Activity
         }
         Settings.prefs(this).edit().putBoolean("notifications_asked", true).apply();
         if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {"android.permission.POST_NOTIFICATIONS"}, request_notification_permission);
+            requestPermissions(new String[] {"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATION_PERMISSION);
         }
     }
 
@@ -687,32 +686,32 @@ public class MainActivity extends Activity
     private void theme_apply()
     {
         boolean is_dark = "dark".equals(Settings.theme(this));
-        palette = is_dark ? dark : light;
+        palette = is_dark ? DARK : LIGHT;
         theme_button.setText(is_dark ? "light" : "dark");
-        getWindow().setStatusBarColor(palette[color_bg]);
-        getWindow().setNavigationBarColor(palette[color_bg]);
+        getWindow().setStatusBarColor(palette[COLOR_BG]);
+        getWindow().setNavigationBarColor(palette[COLOR_BG]);
         getWindow().getDecorView().setSystemUiVisibility(is_dark ? 0 : (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR));
-        ((View) root.getParent()).setBackgroundColor(palette[color_bg]);
-        title.setTextColor(palette[color_fg]);
-        theme_button.setTextColor(palette[color_muted]);
-        server_button.setTextColor(palette[color_muted]);
-        status_card.setBackground(rounded(palette[color_surface], palette[color_border], 14));
-        update_card.setBackground(rounded(palette[color_surface], palette[color_accent], 14));
-        laptop_text.setTextColor(palette[color_fg]);
-        queue_text.setTextColor(palette[color_muted]);
-        update_text.setTextColor(palette[color_fg]);
+        ((View) root.getParent()).setBackgroundColor(palette[COLOR_BG]);
+        title.setTextColor(palette[COLOR_FG]);
+        theme_button.setTextColor(palette[COLOR_MUTED]);
+        server_button.setTextColor(palette[COLOR_MUTED]);
+        status_card.setBackground(rounded_create(palette[COLOR_SURFACE], palette[COLOR_BORDER], 14));
+        update_card.setBackground(rounded_create(palette[COLOR_SURFACE], palette[COLOR_ACCENT], 14));
+        laptop_text.setTextColor(palette[COLOR_FG]);
+        queue_text.setTextColor(palette[COLOR_MUTED]);
+        update_text.setTextColor(palette[COLOR_FG]);
         button_style(update_button, true);
         button_style(photo_button, true);
         button_style(voice_button, recorder != null);
         button_style(files_button, false);
         button_style(folder_button, false);
         button_style(text_button, false);
-        text_input.setTextColor(palette[color_fg]);
-        text_input.setHintTextColor(palette[color_muted]);
-        text_input.setBackground(rounded(palette[color_surface], palette[color_border], 12));
+        text_input.setTextColor(palette[COLOR_FG]);
+        text_input.setHintTextColor(palette[COLOR_MUTED]);
+        text_input.setBackground(rounded_create(palette[COLOR_SURFACE], palette[COLOR_BORDER], 12));
     }
 
-    private int dialog_theme()
+    private int dialog_theme_pick()
     {
         return "dark".equals(Settings.theme(this))
             ? android.R.style.Theme_Material_Dialog_Alert
@@ -721,28 +720,28 @@ public class MainActivity extends Activity
 
     // views
 
-    private TextView header_button(String text)
+    private TextView header_button_create(String text)
     {
         TextView out = new TextView(this);
         out.setText(text);
         out.setTextSize(14f);
-        out.setPadding(dp(12), dp(12), dp(12), dp(12));
+        out.setPadding(px_from_dp(12), px_from_dp(12), px_from_dp(12), px_from_dp(12));
         return out;
     }
 
-    private LinearLayout card()
+    private LinearLayout card_create()
     {
         LinearLayout out = new LinearLayout(this);
         out.setOrientation(LinearLayout.VERTICAL);
-        out.setPadding(dp(16), dp(12), dp(16), dp(12));
+        out.setPadding(px_from_dp(16), px_from_dp(12), px_from_dp(16), px_from_dp(12));
         return out;
     }
 
-    private LinearLayout.LayoutParams spaced(int top_dp)
+    private LinearLayout.LayoutParams spaced_params_create(int top_dp)
     {
         LinearLayout.LayoutParams out = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        out.topMargin = dp(top_dp);
+        out.topMargin = px_from_dp(top_dp);
         return out;
     }
 
@@ -751,45 +750,52 @@ public class MainActivity extends Activity
         button.setAllCaps(false);
         button.setTextSize(17f);
         button.setStateListAnimator(null);
-        button.setMinHeight(dp(56));
-        button.setBackground(button_background(primary));
-        button.setTextColor(primary ? palette[color_accent_fg] : palette[color_fg]);
+        button.setMinHeight(px_from_dp(56));
+        button.setBackground(button_background_create(primary));
+        button.setTextColor(primary ? palette[COLOR_ACCENT_FG] : palette[COLOR_FG]);
     }
 
-    private GradientDrawable button_background(boolean primary)
+    private GradientDrawable button_background_create(boolean primary)
     {
         return primary
-            ? rounded(palette[color_accent], palette[color_accent], 14)
-            : rounded(palette[color_surface], palette[color_border], 14);
+            ? rounded_create(palette[COLOR_ACCENT], palette[COLOR_ACCENT], 14)
+            : rounded_create(palette[COLOR_SURFACE], palette[COLOR_BORDER], 14);
     }
 
-    private GradientDrawable rounded(int fill, int stroke, int radius_dp)
+    private GradientDrawable rounded_create(int fill, int stroke, int radius_dp)
     {
         GradientDrawable out = new GradientDrawable();
         out.setColor(fill);
-        out.setStroke(dp(1), stroke);
-        out.setCornerRadius(dp(radius_dp));
+        out.setStroke(px_from_dp(1), stroke);
+        out.setCornerRadius(px_from_dp(radius_dp));
         return out;
     }
 
     // helpers
 
-    private void report(String event, String detail)
+    private void client_log_post(String event_name, String detail)
     {
         String url = Settings.server(this);
         if (url == null) {
             return;
         }
         String version = Settings.version(this);
-        new Thread(() -> Server.report(url, version, event, detail)).start();
+        new Thread(() -> Server.client_log_post(url, version, event_name, detail)).start();
     }
 
-    private void toast(String message)
+    private void toast_show(String message)
     {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
-    private int dp(int value)
+    // 75000 → "1:15"
+    private static String format_duration(long ms)
+    {
+        long seconds = ms/1000;
+        return String.format(Locale.US, "%d:%02d", seconds/60, seconds%60);
+    }
+
+    private int px_from_dp(int value)
     {
         return Math.round(value*getResources().getDisplayMetrics().density);
     }

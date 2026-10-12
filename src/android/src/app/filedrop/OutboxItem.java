@@ -55,19 +55,19 @@ public class OutboxItem
         return new OutboxItem(dir, meta.getProperty("path"), size, mtime, meta.getProperty("day"));
     }
 
-    public void write_meta() throws IOException
+    public void meta_write() throws IOException
     {
         Properties meta = new Properties();
         meta.setProperty("path", path);
         meta.setProperty("size", String.valueOf(size));
         meta.setProperty("mtime", String.valueOf(mtime));
         meta.setProperty("day", day);
-        OutputStream out = new FileOutputStream(new File(dir, "meta.properties"));
+        OutputStream meta_stream = new FileOutputStream(new File(dir, "meta.properties"));
         try {
-            meta.store(out, null);
+            meta.store(meta_stream, null);
         }
         finally {
-            out.close();
+            meta_stream.close();
         }
     }
 }

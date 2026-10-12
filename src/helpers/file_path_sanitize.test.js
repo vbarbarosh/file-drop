@@ -19,6 +19,6 @@ test('nothing usable gives an empty path', function () {
 });
 
 test('a deep tree keeps its last 16 levels', function () {
-    const deep = Array.from({length: 20}, (v, i) => `d${i}`).join('/');
+    const deep = Array.from({length: 20}, (slot, level) => `d${level}`).join('/');
     assert.strictEqual(file_path_sanitize(`${deep}/f.txt`).split('/').length, 16);
 });

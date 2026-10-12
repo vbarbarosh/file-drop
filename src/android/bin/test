@@ -17,7 +17,6 @@ EXIT_MESSAGE="${RED}src/android/bin/test failed${RESET}"
 # http://redsymbol.net/articles/unofficial-bash-strict-mode/#essential-cleanup
 tempdir=`mktemp -d -t tmp.XXXXXXXXXX`
 trap 'rm -rf $tempdir; echo -e "$EXIT_MESSAGE"' EXIT
-cd $tempdir
 
 cd $scriptdir/..
 

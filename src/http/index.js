@@ -28,18 +28,18 @@ const os = require('os');
 const path = require('path');
 const stream_promises = require('stream/promises');
 
-const public_dir = fs_path_join(__dirname, 'public');
+const PUBLIC_DIR = fs_path_join(__dirname, 'public');
 // node index.js [drop_dir] [state_dir]: files land in drop_dir, the
 // current directory by default; uploads in progress and done ids are the
 // server's own state, kept in the project's data/ unless told otherwise.
-const drop_dir = (process.argv[2] === undefined) ? process.cwd() : fs_path_resolve(process.argv[2]);
-const uploads_dir = (process.argv[3] === undefined) ? fs_path_resolve(__dirname, '../../data/uploads') : fs_path_resolve(process.argv[3]);
-const port = Number(process.env.PORT ?? 8080);
-const discovery_question = 'file-drop?';
-const part_max_age_ms = 7*24*3600*1000;
-const done_max_age_ms = 30*24*3600*1000;
+const DROP_DIR = (process.argv[2] === undefined) ? process.cwd() : fs_path_resolve(process.argv[2]);
+const UPLOADS_DIR = (process.argv[3] === undefined) ? fs_path_resolve(__dirname, '../../data/uploads') : fs_path_resolve(process.argv[3]);
+const PORT = Number(process.env.PORT ?? 8080);
+const DISCOVERY_QUESTION = 'file-drop?';
+const PART_MAX_AGE_MS = 7*24*3600*1000;
+const DONE_MAX_AGE_MS = 30*24*3600*1000;
 
-const mime_by_ext = {
+const MIME_BY_EXT = {
     '.apk': 'application/vnd.android.package-archive',
     '.css': 'text/css',
     '.html': 'text/html; charset=utf-8',
@@ -65,12 +65,12 @@ async function main()
     process.on('SIGINT', () => process.exit(0));
     process.on('SIGTERM', () => process.exit(0));
 
-    await fs_mkdirp(drop_dir);
-    await fs_mkdirp(uploads_dir);
+    await fs_mkdirp(DROP_DIR);
+    await fs_mkdirp(UPLOADS_DIR);
     await uploads_remove_old();
 
     const server = http.createServer(function (req, res) {
-        request_route(req, res).catch(error => request_failed(req, res, error));
+        request_route(req, res).catch(e => request_fail(req, res, e));
     });
 
     // A video over wifi takes minutes: no limit on a whole request. A phone
@@ -79,10 +79,10 @@ async function main()
     server.requestTimeout = 0;
     server.timeout = 60000;
 
-    server.listen(port, '0.0.0.0', function () {
-        log(group_uid, 'server_listen', `port=${port} dir=${format_log_value(drop_dir)}`);
+    server.listen(PORT, '0.0.0.0', function () {
+        log(group_uid, 'server_listen', `port=${PORT} dir=${format_log_value(DROP_DIR)}`);
         // Open on the phone, on the same wifi.
-        for (const url of list_lan_urls()) {
+        for (const url of lan_urls_list()) {
             log(group_uid, 'server_lan_url', url);
         }
     });
@@ -113,9 +113,9 @@ async function request_route(req, res)
 }
 
 // One failed request is logged and answered 500; the server goes on.
-function request_failed(req, res, error)
+function request_fail(req, res, error)
 {
-    log(group_uid, 'request_failed', `method=${req.method} url=${format_log_value(req.url)} error=${format_log_value(error.message)}`);
+    log(group_uid, 'request_failed', `method=${req.method} path=${format_log_value(req.url.split('?')[0])} error=${format_log_value(error.message)}`);
     if (res.headersSent) {
         res.destroy();
         return;
@@ -124,28 +124,28 @@ function request_failed(req, res, error)
     res.end(JSON.stringify({error: 'server error'}));
 }
 
-// GET /upload/:id
+// GET /upload/<id>
 // How much of the upload the server holds, where it went once complete, and
 // whether a connection still holds it: a phone that lost the wifi mid-file
 // comes back before the server gives up on the old connection.
 async function upload_get(req, res, id)
 {
-    upload_answer(res, 200, {offset: await fs_size_enoent(part_path_of(id)), saved: await done_read(id), busy: busy_ids.has(id)});
+    const offset = await fs_size_enoent(part_path_from_id(id));
+    const saved = await done_read(id);
+    upload_answer(res, 200, {offset, saved, busy: busy_ids.has(id)});
 }
 
-// POST /upload/:id (body, header:x-upload-offset, header:x-file-size,
-//                   header:x-file-path, header:x-file-mtime)
+// POST /upload/<id> (body, header:x-upload-offset, header:x-file-size, header:x-file-path, header:x-file-mtime)
 // The body is the file from x-upload-offset on; it is appended to a part
 // file, so a connection lost mid-file continues where it stopped. The last
-// byte moves the part to <drop_dir>/<path>, and the id is remembered as done:
+// byte moves the part to <DROP_DIR>/<path>, and the id is remembered as done:
 // repeating a finished upload changes nothing.
 async function upload_post(req, res, id)
 {
     const time0 = Date.now();
     const offset = Number(req.headers['x-upload-offset'] ?? 0);
     const size = Number(req.headers['x-file-size']);
-    const relative = upload_relative_path(req, id);
-    const part_path = part_path_of(id);
+    const part_path = part_path_from_id(id);
 
     const saved = await done_read(id);
     if (saved !== null) {
@@ -166,6 +166,7 @@ async function upload_post(req, res, id)
         return;
     }
 
+    const relative = relative_from_request(req, id);
     busy_ids.add(id);
     try {
         await stream_promises.pipeline(req, fs_write_stream(part_path, {flags: 'a'}));
@@ -195,18 +196,50 @@ async function upload_post(req, res, id)
     const placed = await place_serial(() => part_place(part_path, relative));
     await done_write(id, placed.saved);
     if (!placed.duplicate) {
-        await mtime_restore(fs_path_join(drop_dir, placed.saved), req.headers['x-file-mtime']);
+        await mtime_restore(fs_path_join(DROP_DIR, placed.saved), req.headers['x-file-mtime']);
     }
-    const sender = placed.duplicate ? 'upload_duplicate' : 'upload_saved';
-    log(group_uid, sender, `file=${format_log_value(placed.saved)} bytes=${size} ${format_seconds(Date.now() - time0)}`);
+    if (placed.duplicate) {
+        log(group_uid, 'upload_duplicate', `file=${format_log_value(placed.saved)} bytes=${size} ${format_seconds(Date.now() - time0)}`);
+    }
+    else {
+        log(group_uid, 'upload_saved', `file=${format_log_value(placed.saved)} bytes=${size} ${format_seconds(Date.now() - time0)}`);
+    }
     upload_answer(res, 200, {offset: size, saved: placed.saved});
+}
+
+// An answer before the body is read: the body is not wanted, a whole video
+// would be drained for nothing, so the connection closes after the answer.
+function upload_refuse(req, res, status, body)
+{
+    res.setHeader('connection', 'close');
+    res.on('finish', () => req.destroy());
+    upload_answer(res, status, body);
+}
+
+// The state goes twice: as headers for the app, which reads no JSON, and as
+// JSON for the page.
+function upload_answer(res, status, body)
+{
+    if (res.headersSent) {
+        return;
+    }
+    const headers = {'content-type': 'application/json', 'x-upload-offset': String(body.offset ?? 0)};
+    if (body.saved) {
+        headers['x-file-saved'] = encodeURIComponent(body.saved);
+    }
+    if (body.busy) {
+        headers['x-upload-busy'] = '1';
+    }
+    res.writeHead(status, headers);
+    res.end(JSON.stringify(body));
 }
 
 // GET /info
 // The app's check: who answers, and which apk it serves.
 async function info_get(req, res)
 {
-    json_send(res, 200, {name: 'file-drop', host: os.hostname(), apk_version: await apk_version_read()});
+    const apk_version = await apk_version_read();
+    json_send(res, 200, {name: 'file-drop', host: os.hostname(), apk_version});
 }
 
 // POST /client-log (body)
@@ -216,7 +249,8 @@ function client_log_post(req, res)
     const chunks = [];
     req.on('data', v => chunks.push(v));
     req.on('end', function () {
-        log(group_uid, 'phone_report', format_phone_report(Buffer.concat(chunks).toString()));
+        const body = Buffer.concat(chunks).toString();
+        log(group_uid, 'phone_report', format_phone_report(body));
         res.writeHead(204);
         res.end();
     });
@@ -227,18 +261,16 @@ async function static_get(req, res)
 {
     const url_path = req.url.split('?')[0];
     const relative = (url_path === '/') ? 'index.html' : url_path.slice(1);
-    const file_path = fs_path_join(public_dir, relative);
+    const file_path = fs_path_join(PUBLIC_DIR, relative);
 
-    if (!file_path.startsWith(`${public_dir}${path.sep}`) || !(await fs_exists(file_path))) {
+    if (!file_path.startsWith(`${PUBLIC_DIR}${path.sep}`) || !(await fs_exists(file_path))) {
         res.writeHead(404, {'content-type': 'text/plain'});
         res.end('not found');
         return;
     }
 
-    res.writeHead(200, {
-        'cache-control': 'no-store',
-        'content-type': mime_by_ext[fs_path_extname(file_path)] ?? 'application/octet-stream',
-    });
+    const content_type = MIME_BY_EXT[fs_path_extname(file_path)] ?? 'application/octet-stream';
+    res.writeHead(200, {'cache-control': 'no-store', 'content-type': content_type});
     res.end(await fs_read_buffer(file_path));
 }
 
@@ -248,10 +280,10 @@ function discovery_listen()
 {
     const socket = dgram.createSocket('udp4');
     socket.on('message', function (message, remote) {
-        if (message.toString() !== discovery_question) {
+        if (message.toString() !== DISCOVERY_QUESTION) {
             return;
         }
-        const answer = JSON.stringify({name: 'file-drop', host: os.hostname(), port});
+        const answer = JSON.stringify({name: 'file-drop', host: os.hostname(), port: PORT});
         socket.send(answer, remote.port, remote.address);
         log(group_uid, 'discovery_answer', `to=${remote.address}`);
     });
@@ -259,13 +291,13 @@ function discovery_listen()
         log(group_uid, 'discovery_error', `error=${format_log_value(error.message)}`);
         socket.close();
     });
-    socket.bind(port, '0.0.0.0');
+    socket.bind(PORT, '0.0.0.0');
 }
 
 // Places run one at a time, so two uploads of one name never take one place.
-function place_serial(fn)
+function place_serial(place)
 {
-    const out = place_queue.then(fn);
+    const out = place_queue.then(place);
     place_queue = out.catch(ignore);
     return out;
 }
@@ -278,8 +310,8 @@ async function part_place(part_path, relative)
     const part_size = await fs_size_enoent(part_path);
     let counter = 0;
     while (true) {
-        const candidate = name_numbered(relative, counter);
-        const candidate_path = fs_path_join(drop_dir, candidate);
+        const candidate = candidate_from_relative(relative, counter);
+        const candidate_path = fs_path_join(DROP_DIR, candidate);
         if (!(await fs_exists(candidate_path))) {
             await fs_mkdirp(fs_path_dirname(candidate_path));
             await part_move(part_path, candidate_path);
@@ -320,6 +352,11 @@ async function part_move(part_path, file_path)
     await fs_rmf(part_path);
 }
 
+function part_path_from_id(id)
+{
+    return fs_path_join(UPLOADS_DIR, `${id}.part`);
+}
+
 // The phone's own time of the file, so the folder sorts by when a photo was taken.
 async function mtime_restore(file_path, header)
 {
@@ -335,10 +372,10 @@ async function mtime_restore(file_path, header)
 async function uploads_remove_old()
 {
     const now = Date.now();
-    for (const name of await fs_readdir(uploads_dir)) {
-        const file_path = fs_path_join(uploads_dir, name);
+    for (const name of await fs_readdir(UPLOADS_DIR)) {
+        const file_path = fs_path_join(UPLOADS_DIR, name);
         const stat = await fs_stat(file_path);
-        const max_age_ms = name.endsWith('.part') ? part_max_age_ms : done_max_age_ms;
+        const max_age_ms = name.endsWith('.part') ? PART_MAX_AGE_MS : DONE_MAX_AGE_MS;
         if ((now - stat.mtimeMs) > max_age_ms) {
             await fs_rmf(file_path);
             log(group_uid, 'upload_forgotten', `file=${format_log_value(name)}`);
@@ -346,13 +383,14 @@ async function uploads_remove_old()
     }
 }
 
-// The path the phone sent, safe inside drop_dir: a file goes straight in,
+// The path the phone sent, safe inside DROP_DIR: a file goes straight in,
 // a picked folder keeps its tree.
-function upload_relative_path(req, id)
+function relative_from_request(req, id)
 {
-    let decoded = req.headers['x-file-path'] ?? '';
+    const header = req.headers['x-file-path'] ?? '';
+    let decoded = header;
     try {
-        decoded = decodeURIComponent(decoded);
+        decoded = decodeURIComponent(header);
     }
     catch {
         // a raw name with a stray %, kept as it came
@@ -362,7 +400,7 @@ function upload_relative_path(req, id)
 }
 
 // photo.jpg, then photo_1.jpg, photo_2.jpg: a file is never overwritten.
-function name_numbered(relative, counter)
+function candidate_from_relative(relative, counter)
 {
     if (counter === 0) {
         return relative;
@@ -371,15 +409,10 @@ function name_numbered(relative, counter)
     return `${relative.slice(0, relative.length - ext.length)}_${counter}${ext}`;
 }
 
-function part_path_of(id)
-{
-    return fs_path_join(uploads_dir, `${id}.part`);
-}
-
 async function done_read(id)
 {
     try {
-        return await fs_read_utf8(fs_path_join(uploads_dir, `${id}.done`));
+        return await fs_read_utf8(fs_path_join(UPLOADS_DIR, `${id}.done`));
     }
     catch {
         return null;
@@ -388,44 +421,18 @@ async function done_read(id)
 
 async function done_write(id, saved)
 {
-    await fs_write(fs_path_join(uploads_dir, `${id}.done`), saved);
+    await fs_write(fs_path_join(UPLOADS_DIR, `${id}.done`), saved);
 }
 
 async function apk_version_read()
 {
     try {
-        return Number((await fs_read_utf8(fs_path_join(public_dir, 'apk-version.txt'))).trim());
+        const text = await fs_read_utf8(fs_path_join(PUBLIC_DIR, 'apk-version.txt'));
+        return Number(text.trim());
     }
     catch {
         return 0;
     }
-}
-
-// An answer before the body is read: the body is not wanted, a whole video
-// would be drained for nothing, so the connection closes after the answer.
-function upload_refuse(req, res, status, body)
-{
-    res.setHeader('connection', 'close');
-    res.on('finish', () => req.destroy());
-    upload_answer(res, status, body);
-}
-
-// The state goes twice: as headers for the app, which reads no JSON, and as
-// JSON for the page.
-function upload_answer(res, status, body)
-{
-    if (res.headersSent) {
-        return;
-    }
-    const headers = {'content-type': 'application/json', 'x-upload-offset': String(body.offset ?? 0)};
-    if (body.saved) {
-        headers['x-file-saved'] = encodeURIComponent(body.saved);
-    }
-    if (body.busy) {
-        headers['x-upload-busy'] = '1';
-    }
-    res.writeHead(status, headers);
-    res.end(JSON.stringify(body));
 }
 
 function json_send(res, status, body)
@@ -441,18 +448,18 @@ function format_phone_report(body)
         report = JSON.parse(body);
     }
     catch {
-        return `invalid=${format_log_value(body.slice(0, 200))}`;
+        return `invalid=true bytes=${Buffer.byteLength(body)}`;
     }
     return `version=${format_log_value(report.version)} event=${format_log_value(report.event)} detail=${format_log_value(report.detail)}`;
 }
 
-function list_lan_urls()
+function lan_urls_list()
 {
     const out = [];
     for (const addresses of Object.values(os.networkInterfaces())) {
         for (const address of addresses) {
             if ((address.family === 'IPv4') && !address.internal) {
-                out.push(`http://${address.address}:${port}/`);
+                out.push(`http://${address.address}:${PORT}/`);
             }
         }
     }

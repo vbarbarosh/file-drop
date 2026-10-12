@@ -24,7 +24,7 @@ public class Importer
 {
     public interface Done
     {
-        void on_done(int added, String error);
+        void on_done(int added, String failure);
     }
 
     private static class Entry
@@ -52,9 +52,9 @@ public class Importer
         executor.execute(() -> {
             List<Entry> entries = new ArrayList<>();
             for (Uri uri : uris) {
-                entries.add(entry_of(app.getContentResolver(), uri));
+                entries.add(entry_from_uri(app.getContentResolver(), uri));
             }
-            copy(app, entries, done);
+            entries_copy(app, entries, done);
         });
     }
 
@@ -67,15 +67,15 @@ public class Importer
             List<Entry> entries = new ArrayList<>();
             try {
                 String root_id = DocumentsContract.getTreeDocumentId(tree);
-                String root_name = document_name(app.getContentResolver(), DocumentsContract.buildDocumentUriUsingTree(tree, root_id));
+                String root_name = document_name_read(app.getContentResolver(), DocumentsContract.buildDocumentUriUsingTree(tree, root_id));
                 tree_walk(app.getContentResolver(), tree, root_id, root_name, entries);
             }
             catch (Exception error) {
                 status = null;
-                post(done, 0, "cannot read the folder: " + error.getMessage());
+                done_post(done, 0, "cannot read the folder: " + error.getMessage());
                 return;
             }
-            copy(app, entries, done);
+            entries_copy(app, entries, done);
         });
     }
 
@@ -87,10 +87,10 @@ public class Importer
                 InputStream in = new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
                 Settings.outbox(app).add(in, "note_" + Outbox.time_stamp() + ".txt", System.currentTimeMillis(), Outbox.today());
                 SendJob.kick(app);
-                post(done, 1, null);
+                done_post(done, 1, null);
             }
             catch (Exception error) {
-                post(done, 0, "cannot add the text: " + error.getMessage());
+                done_post(done, 0, "cannot add the text: " + error.getMessage());
             }
         });
     }
@@ -103,21 +103,21 @@ public class Importer
             try {
                 Settings.outbox(app).add_file(file, name, file.lastModified(), Outbox.today());
                 SendJob.kick(app);
-                post(done, 1, null);
+                done_post(done, 1, null);
             }
             catch (Exception error) {
-                post(done, 0, "cannot add " + name + ": " + error.getMessage());
+                done_post(done, 0, "cannot add " + name + ": " + error.getMessage());
             }
         });
     }
 
-    private static void copy(Context app, List<Entry> entries, Done done)
+    private static void entries_copy(Context app, List<Entry> entries, Done done)
     {
         Outbox outbox = Settings.outbox(app);
         String day = Outbox.today();
         int added = 0;
         boolean kicked = false;
-        String failed = null;
+        String failure = null;
         for (int i = 0; i < entries.size(); ++i) {
             Entry entry = entries.get(i);
             status = "adding " + (i + 1) + " of " + entries.size();
@@ -132,7 +132,7 @@ public class Importer
                 added += 1;
             }
             catch (Exception error) {
-                failed = "cannot add " + entry.path + ": " + error.getMessage();
+                failure = "cannot add " + entry.path + ": " + error.getMessage();
             }
             // The first files can go while the rest are still copied.
             if ((added == 1) && !kicked) {
@@ -144,10 +144,10 @@ public class Importer
         if (added > 0) {
             SendJob.kick(app);
         }
-        post(done, added, failed);
+        done_post(done, added, failure);
     }
 
-    private static void tree_walk(ContentResolver resolver, Uri tree, String parent_id, String prefix, List<Entry> out)
+    private static void tree_walk(ContentResolver resolver, Uri tree, String parent_id, String prefix, List<Entry> entries)
     {
         Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parent_id);
         String[] columns = {
@@ -166,11 +166,11 @@ public class Importer
                 String name = cursor.getString(1);
                 String path = prefix + "/" + name;
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(2))) {
-                    tree_walk(resolver, tree, id, path, out);
+                    tree_walk(resolver, tree, id, path, entries);
                     continue;
                 }
                 long mtime = cursor.isNull(3) ? System.currentTimeMillis() : cursor.getLong(3);
-                out.add(new Entry(DocumentsContract.buildDocumentUriUsingTree(tree, id), path, mtime));
+                entries.add(new Entry(DocumentsContract.buildDocumentUriUsingTree(tree, id), path, mtime));
             }
         }
         finally {
@@ -179,7 +179,7 @@ public class Importer
     }
 
     // The name the picker shows, and the file's own time when the provider knows it.
-    private static Entry entry_of(ContentResolver resolver, Uri uri)
+    private static Entry entry_from_uri(ContentResolver resolver, Uri uri)
     {
         String name = null;
         long mtime = System.currentTimeMillis();
@@ -212,7 +212,7 @@ public class Importer
         return new Entry(uri, name, mtime);
     }
 
-    private static String document_name(ContentResolver resolver, Uri uri)
+    private static String document_name_read(ContentResolver resolver, Uri uri)
     {
         Cursor cursor = resolver.query(uri, new String[] {DocumentsContract.Document.COLUMN_DISPLAY_NAME}, null, null, null);
         if (cursor == null) {
@@ -226,11 +226,11 @@ public class Importer
         }
     }
 
-    private static void post(Done done, int added, String error)
+    private static void done_post(Done done, int added, String failure)
     {
         if (done == null) {
             return;
         }
-        new Handler(Looper.getMainLooper()).post(() -> done.on_done(added, error));
+        new Handler(Looper.getMainLooper()).post(() -> done.on_done(added, failure));
     }
 }

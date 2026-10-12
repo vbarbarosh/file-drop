@@ -1,10 +1,10 @@
-const version = 1;
+const VERSION = 1;
 
 const file_input = document.getElementById('file_input');
 const text_form = document.getElementById('text_form');
 const text_input = document.getElementById('text_input');
 const theme_toggle = document.getElementById('theme_toggle');
-const uploads = document.getElementById('uploads');
+const uploads_el = document.getElementById('uploads');
 
 const queue = [];
 let sending = false;
@@ -38,18 +38,19 @@ function main()
         if (text === '') {
             return;
         }
-        queue_add(new Blob([text], {type: 'text/plain'}), `note_${format_time_stamp(new Date())}.txt`);
+        const blob = new Blob([text], {type: 'text/plain'});
+        queue_add(blob, `note_${stamp_from_date(new Date())}.txt`);
         text_input.value = '';
     });
 
     refresh_info();
-    report('page-loaded', `v${version} ${navigator.userAgent}`);
+    report('page-loaded', `v${VERSION} ${navigator.userAgent}`);
 }
 
 async function refresh_info()
 {
-    const res = await fetch('info');
-    const info = await res.json();
+    const response = await fetch('info');
+    const info = await response.json();
     document.getElementById('host').textContent = `→ ${info.host}`;
     document.getElementById('apk_link').hidden = (info.apk_version === 0);
 }
@@ -65,7 +66,7 @@ function queue_add(blob, name)
     progress.max = 1;
     progress.value = 0;
     row.append(label, progress);
-    uploads.prepend(row);
+    uploads_el.prepend(row);
     queue.push({blob, name, row, progress});
     queue_run();
 }
@@ -98,8 +99,8 @@ function upload_send(item)
     return new Promise(function (resolve, reject) {
         const xhr = new XMLHttpRequest();
         const now = new Date();
-        xhr.open('POST', `upload/${upload_id()}`);
-        xhr.setRequestHeader('x-file-day', format_day(now));
+        xhr.open('POST', `upload/${upload_id_create()}`);
+        xhr.setRequestHeader('x-file-day', day_from_date(now));
         xhr.setRequestHeader('x-file-mtime', String(item.blob.lastModified ?? now.getTime()));
         xhr.setRequestHeader('x-file-path', encodeURIComponent(item.name));
         xhr.setRequestHeader('x-file-size', String(item.blob.size));
@@ -121,7 +122,7 @@ function upload_send(item)
 }
 
 // crypto.randomUUID needs a secure context; a page on a LAN address is not one.
-function upload_id()
+function upload_id_create()
 {
     const bytes = crypto.getRandomValues(new Uint8Array(12));
     return Array.from(bytes, v => v.toString(16).padStart(2, '0')).join('');
@@ -129,23 +130,21 @@ function upload_id()
 
 // diagnostics: every event lands in the server console on the laptop
 
-function report(event, detail)
+function report(event_name, detail)
 {
-    fetch('client-log', {
-        body: JSON.stringify({version: `page-${version}`, event, detail}),
-        headers: {'content-type': 'application/json'},
-        method: 'POST',
-    }).catch(ignore);
+    const body = JSON.stringify({version: `page-${VERSION}`, event: event_name, detail});
+    const sent = fetch('client-log', {body, headers: {'content-type': 'application/json'}, method: 'POST'});
+    sent.catch(ignore);
 }
 
-function format_day(date)
+function day_from_date(date)
 {
     return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
-function format_time_stamp(date)
+function stamp_from_date(date)
 {
-    return `${format_day(date)}_${pad2(date.getHours())}-${pad2(date.getMinutes())}-${pad2(date.getSeconds())}`;
+    return `${day_from_date(date)}_${pad2(date.getHours())}-${pad2(date.getMinutes())}-${pad2(date.getSeconds())}`;
 }
 
 function pad2(value)

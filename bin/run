@@ -17,10 +17,7 @@ EXIT_MESSAGE="${RED}bin/run failed${RESET}"
 drop_dir=$PWD
 
 # http://redsymbol.net/articles/bash-exit-traps/
-# http://redsymbol.net/articles/unofficial-bash-strict-mode/#essential-cleanup
-tempdir=`mktemp -d -t tmp.XXXXXXXXXX`
-trap 'rm -rf $tempdir; echo -e "$EXIT_MESSAGE"' EXIT
-cd $tempdir
+trap 'echo -e "$EXIT_MESSAGE"' EXIT
 
 cd $scriptdir/..
 

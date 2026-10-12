@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // It needs only tcp, which the uploads need anyway.
 public class Scan
 {
-    private static final int threads = 64;
+    private static final int THREADS = 64;
 
     // What the search is doing now, for the screen: "asking the wifi…",
     // "scanning 192.168.1.x · 120 of 254", or null when no search runs.
@@ -33,8 +33,8 @@ public class Scan
     public static List<Server> run(int port, int connect_ms, List<String> prefixes)
     {
         List<Server> out = new ArrayList<>();
-        ExecutorService executor = Executors.newFixedThreadPool(threads);
-        AtomicInteger done = new AtomicInteger();
+        ExecutorService executor = Executors.newFixedThreadPool(THREADS);
+        AtomicInteger done_count = new AtomicInteger();
         int total = prefixes.size()*254;
         List<String> networks = new ArrayList<>();
         for (String prefix : prefixes) {
@@ -48,8 +48,8 @@ public class Scan
                 for (int i = 1; i <= 254; ++i) {
                     String url = "http://" + prefix + i + ":" + port;
                     answers.add(executor.submit(() -> {
-                        Server server = Server.info(url, connect_ms);
-                        progress = scanning + " · " + done.incrementAndGet() + " of " + total;
+                        Server server = Server.info_get(url, connect_ms);
+                        progress = scanning + " · " + done_count.incrementAndGet() + " of " + total;
                         return server;
                     }));
                 }
@@ -92,13 +92,13 @@ public class Scan
     {
         List<InetAddress> out = new ArrayList<>();
         try {
-            for (NetworkInterface face : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                String name = face.getName();
-                if (!face.isUp() || face.isLoopback() || name.startsWith("rmnet") || name.startsWith("ccmni")
+            for (NetworkInterface network_interface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                String name = network_interface.getName();
+                if (!network_interface.isUp() || network_interface.isLoopback() || name.startsWith("rmnet") || name.startsWith("ccmni")
                     || name.startsWith("v4-") || name.startsWith("tun") || name.startsWith("dummy")) {
                     continue;
                 }
-                for (InterfaceAddress address : face.getInterfaceAddresses()) {
+                for (InterfaceAddress address : network_interface.getInterfaceAddresses()) {
                     InetAddress inet = address.getAddress();
                     if ((inet instanceof Inet4Address) && inet.isSiteLocalAddress()) {
                         out.add(inet);

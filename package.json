@@ -1,8 +1,10 @@
 {
   "name": "file-drop",
+  "description": "An Android app that only sends: photos, voice notes, files, folders and text go from the phone to a folder on your laptop over home wifi.",
   "private": true,
   "scripts": {
     "start": "node src/http/index.js",
+    "lint": "npx vbarbarosh/rules src",
     "test": "node --test 'src/**/*.test.js'"
   },
   "dependencies": {

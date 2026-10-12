@@ -8,7 +8,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 // while it runs are sent in the same run.
 public class Sender
 {
-    public enum Result { sent_all, no_server, connection_lost, stopped }
+    public enum Result
+    {
+        sent_all, no_server, connection_lost, stopped
+    }
 
     public interface Listener extends Uploader.Progress
     {
@@ -21,7 +24,7 @@ public class Sender
         void on_item_failed(OutboxItem item, Exception error);
     }
 
-    public static Result run(Outbox outbox, String saved_url, Listener listener, AtomicBoolean stop, String... extra_targets)
+    public static Result run(Outbox outbox, String saved_url, Listener listener, AtomicBoolean stop_requested, String... extra_targets)
     {
         Server server = Server.find(saved_url, extra_targets);
         if (server == null) {
@@ -31,7 +34,7 @@ public class Sender
 
         // Android takes the time back mid-file: the upload stops at once.
         Uploader.Progress progress = (item, sent, size) -> {
-            if (stop.get()) {
+            if (stop_requested.get()) {
                 throw new Uploader.Stopped();
             }
             listener.on_progress(item, sent, size);
@@ -44,7 +47,7 @@ public class Sender
             }
             for (int i = 0; i < items.size(); ++i) {
                 OutboxItem item = items.get(i);
-                if (stop.get()) {
+                if (stop_requested.get()) {
                     return Result.stopped;
                 }
                 listener.on_item_begin(item, items.size() - i);

@@ -20,13 +20,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 // sooner at first, then every five minutes, until the outbox is empty.
 public class SendJob extends JobService
 {
-    private static final int job_id = 1;
-    private static final long[] retry_delays_ms = {15000, 30000, 60000, 120000, 300000};
-    private static final String channel_id = "sending";
-    private static final int notice_sending = 1;
-    private static final int notice_update = 2;
+    private static final int JOB_ID = 1;
+    private static final long[] RETRY_DELAYS_MS = {15000, 30000, 60000, 120000, 300000};
+    private static final String CHANNEL_ID = "sending";
+    private static final int NOTICE_SENDING = 1;
+    private static final int NOTICE_UPDATE = 2;
 
-    static final String no_laptop = "no laptop on this wifi";
+    static final String NO_LAPTOP = "no laptop on this wifi";
 
     // What the screen shows; written by the job's thread.
     static volatile boolean running = false;
@@ -35,24 +35,24 @@ public class SendJob extends JobService
 
     // One flag per run: a run Android stopped may still be blocked on the
     // network when the next one starts, and must not be revived by it.
-    private AtomicBoolean stop = new AtomicBoolean();
+    private AtomicBoolean stop_requested = new AtomicBoolean();
 
     // A file was added, or the screen opened: try now, the waits start over.
     public static void kick(Context context)
     {
         Settings.prefs(context).edit().putInt("retry_step", 0).apply();
         if (!running) {
-            schedule(context, 0);
+            job_schedule(context, 0);
         }
     }
 
-    static void schedule(Context context, long delay_ms)
+    static void job_schedule(Context context, long delay_ms)
     {
-        JobInfo.Builder builder = new JobInfo.Builder(job_id, new ComponentName(context, SendJob.class))
+        JobInfo.Builder builder = new JobInfo.Builder(JOB_ID, new ComponentName(context, SendJob.class))
             .setMinimumLatency(delay_ms)
             .setPersisted(true);
         if (Build.VERSION.SDK_INT >= 28) {
-            builder.setRequiredNetwork(Wifi.request());
+            builder.setRequiredNetwork(Wifi.request_build());
         }
         else {
             builder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED);
@@ -62,7 +62,7 @@ public class SendJob extends JobService
 
     static void channel_create(Context context)
     {
-        NotificationChannel channel = new NotificationChannel(channel_id, "Sending", NotificationManager.IMPORTANCE_LOW);
+        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Sending", NotificationManager.IMPORTANCE_LOW);
         context.getSystemService(NotificationManager.class).createNotificationChannel(channel);
     }
 
@@ -70,9 +70,9 @@ public class SendJob extends JobService
     public boolean onStartJob(JobParameters params)
     {
         running = true;
-        AtomicBoolean run_stop = new AtomicBoolean();
-        stop = run_stop;
-        new Thread(() -> run(params, run_stop)).start();
+        AtomicBoolean run_stop_requested = new AtomicBoolean();
+        stop_requested = run_stop_requested;
+        new Thread(() -> job_run(params, run_stop_requested)).start();
         return true;
     }
 
@@ -80,29 +80,29 @@ public class SendJob extends JobService
     @Override
     public boolean onStopJob(JobParameters params)
     {
-        stop.set(true);
+        stop_requested.set(true);
         return true;
     }
 
-    private void run(JobParameters params, AtomicBoolean run_stop)
+    private void job_run(JobParameters params, AtomicBoolean run_stop_requested)
     {
         channel_create(this);
         Wifi.bind(this);
         Outbox outbox = Settings.outbox(this);
         Listener listener = new Listener();
-        Sender.Result result = Sender.run(outbox, Settings.server(this), listener, run_stop);
+        Sender.Result result = Sender.run(outbox, Settings.server(this), listener, run_stop_requested);
         running = false;
 
         int left = outbox.count();
         if (result == Sender.Result.stopped) {
             status = "";
-            getSystemService(NotificationManager.class).cancel(notice_sending);
+            getSystemService(NotificationManager.class).cancel(NOTICE_SENDING);
             return;
         }
         if (left == 0) {
             status = "";
             if (listener.sent > 0) {
-                notice(notice_sending, "Sent " + plural(listener.sent, "file") + " to " + server_host, false, -1);
+                notice_show(NOTICE_SENDING, "Sent " + format_count(listener.sent, "file") + " to " + server_host, false, -1);
             }
             Settings.prefs(this).edit().putInt("retry_step", 0).apply();
             jobFinished(params, false);
@@ -110,13 +110,13 @@ public class SendJob extends JobService
         }
         // Added while the last item went, or the laptop is gone: try again.
         int step = Settings.prefs(this).getInt("retry_step", 0);
-        long delay_ms = (result == Sender.Result.sent_all) ? 0 : retry_delays_ms[Math.min(step, retry_delays_ms.length - 1)];
+        long delay_ms = (result == Sender.Result.sent_all) ? 0 : RETRY_DELAYS_MS[Math.min(step, RETRY_DELAYS_MS.length - 1)];
         Settings.prefs(this).edit().putInt("retry_step", step + 1).apply();
-        status = (result == Sender.Result.no_server) ? no_laptop : "connection lost";
-        notice(notice_sending, plural(left, "file") + " waiting for the laptop", false, -1);
+        status = (result == Sender.Result.no_server) ? NO_LAPTOP : "connection lost";
+        notice_show(NOTICE_SENDING, format_count(left, "file") + " waiting for the laptop", false, -1);
         // Scheduling our own id while it runs would stop it: finish first.
         jobFinished(params, false);
-        schedule(this, delay_ms);
+        job_schedule(this, delay_ms);
     }
 
     private class Listener implements Sender.Listener
@@ -131,7 +131,7 @@ public class SendJob extends JobService
             server_url = server.url;
             server_host = server.host;
             Settings.server_save(SendJob.this, server.url);
-            update_notice(server);
+            update_notice_show(server);
         }
 
         public void on_item_begin(OutboxItem item, int left)
@@ -149,7 +149,7 @@ public class SendJob extends JobService
                 return;
             }
             last_notice_ms = now;
-            notice(notice_sending, "Sending " + item.name() + " · " + plural(left, "file") + " left", true, percent);
+            notice_show(NOTICE_SENDING, "Sending " + item.name() + " · " + format_count(left, "file") + " left", true, percent);
         }
 
         public void on_item_sent(OutboxItem item, String saved)
@@ -160,14 +160,14 @@ public class SendJob extends JobService
         public void on_item_failed(OutboxItem item, Exception error)
         {
             if (server_url != null) {
-                Server.report(server_url, Settings.version(SendJob.this), "send-failed", item.path + ": " + error);
+                Server.client_log_post(server_url, Settings.version(SendJob.this), "send-failed", item.path + ": " + error);
             }
         }
     }
 
     // A newer apk on the laptop is offered once per version; the tap opens
     // the screen, which offers the download.
-    private void update_notice(Server server)
+    private void update_notice_show(Server server)
     {
         int notified = Settings.prefs(this).getInt("update_notified", 0);
         if ((server.apk_version <= Settings.version_code(this)) || (server.apk_version <= notified)) {
@@ -176,21 +176,21 @@ public class SendJob extends JobService
         Settings.prefs(this).edit().putInt("update_notified", server.apk_version).apply();
         Intent open = new Intent(this, MainActivity.class);
         PendingIntent tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE);
-        Notification notification = new Notification.Builder(this, channel_id)
+        Notification notification = new Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle("File Drop update")
             .setContentText("Version " + server.apk_version + " is on the laptop. Tap to download.")
             .setContentIntent(tap)
             .setAutoCancel(true)
             .build();
-        getSystemService(NotificationManager.class).notify(notice_update, notification);
+        getSystemService(NotificationManager.class).notify(NOTICE_UPDATE, notification);
     }
 
-    private void notice(int id, String text, boolean ongoing, int percent)
+    private void notice_show(int id, String text, boolean ongoing, int percent)
     {
         Intent open = new Intent(this, MainActivity.class);
         PendingIntent tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE);
-        Notification.Builder builder = new Notification.Builder(this, channel_id)
+        Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle("File Drop")
             .setContentText(text)
@@ -209,7 +209,7 @@ public class SendJob extends JobService
         }
     }
 
-    static String plural(int count, String noun)
+    static String format_count(int count, String noun)
     {
         return count + " " + noun + ((count == 1) ? "" : "s");
     }

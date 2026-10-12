@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // files go in the order they were added.
 public class Outbox
 {
-    private static final long tmp_max_idle_ms = 10*60*1000;
+    private static final long TMP_MAX_IDLE_MS = 10*60*1000;
     private static final SecureRandom random = new SecureRandom();
     private static final AtomicInteger id_counter = new AtomicInteger();
 
@@ -39,22 +39,22 @@ public class Outbox
         File tmp = tmp_dir_create();
         try {
             long size = 0;
-            OutputStream out = new FileOutputStream(new File(tmp, "data"));
+            OutputStream data_stream = new FileOutputStream(new File(tmp, "data"));
             try {
                 byte[] chunk = new byte[65536];
                 int read;
                 while ((read = in.read(chunk)) > 0) {
-                    out.write(chunk, 0, read);
+                    data_stream.write(chunk, 0, read);
                     size += read;
                 }
             }
             finally {
-                out.close();
+                data_stream.close();
             }
             return item_commit(tmp, path, size, mtime, day);
         }
         catch (IOException | RuntimeException error) {
-            delete_tree(tmp);
+            tree_delete(tmp);
             throw error;
         }
     }
@@ -65,7 +65,7 @@ public class Outbox
         File tmp = tmp_dir_create();
         long size = file.length();
         if (!file.renameTo(new File(tmp, "data"))) {
-            delete_tree(tmp);
+            tree_delete(tmp);
             throw new IOException("cannot move " + file);
         }
         return item_commit(tmp, path, size, mtime, day);
@@ -128,7 +128,7 @@ public class Outbox
 
     public void remove(OutboxItem item)
     {
-        delete_tree(item.dir);
+        tree_delete(item.dir);
     }
 
     // A copy that stopped changing ten minutes ago belongs to a process that died.
@@ -141,8 +141,8 @@ public class Outbox
         long now = System.currentTimeMillis();
         for (String name : names) {
             File tmp = new File(dir, name);
-            if (name.startsWith(".tmp-") && ((now - tree_last_modified(tmp)) > tmp_max_idle_ms)) {
-                delete_tree(tmp);
+            if (name.startsWith(".tmp-") && ((now - tree_last_modified_find(tmp)) > TMP_MAX_IDLE_MS)) {
+                tree_delete(tmp);
             }
         }
     }
@@ -169,10 +169,10 @@ public class Outbox
     private OutboxItem item_commit(File tmp, String path, long size, long mtime, String day) throws IOException
     {
         OutboxItem draft = new OutboxItem(tmp, path, size, mtime, day);
-        draft.write_meta();
+        draft.meta_write();
         File done = new File(dir, tmp.getName().substring(".tmp-".length()));
         if (!tmp.renameTo(done)) {
-            delete_tree(tmp);
+            tree_delete(tmp);
             throw new IOException("cannot rename " + tmp);
         }
         return OutboxItem.read(done);
@@ -193,24 +193,24 @@ public class Outbox
         return id.toString();
     }
 
-    private static long tree_last_modified(File file)
+    private static long tree_last_modified_find(File file)
     {
         long out = file.lastModified();
         File[] children = file.listFiles();
         if (children != null) {
             for (File child : children) {
-                out = Math.max(out, tree_last_modified(child));
+                out = Math.max(out, tree_last_modified_find(child));
             }
         }
         return out;
     }
 
-    static void delete_tree(File file)
+    static void tree_delete(File file)
     {
         File[] children = file.listFiles();
         if (children != null) {
             for (File child : children) {
-                delete_tree(child);
+                tree_delete(child);
             }
         }
         file.delete();

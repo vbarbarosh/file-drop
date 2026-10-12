@@ -5,7 +5,7 @@ function format_log_value(value)
     if ((typeof value === 'string') && /^[!#-Z^-~]+$/.test(value)) {
         return value;
     }
-    return JSON.stringify(value);
+    return JSON.stringify(value ?? null);
 }
 
 module.exports = format_log_value;
